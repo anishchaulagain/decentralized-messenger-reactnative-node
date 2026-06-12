@@ -52,5 +52,8 @@ Thumbs.db
 !.vscode/settings.json
 .idea/
 
+# Design exports from Stitch (re-downloadable via MCP)
+.stitch-designs/
+
 # Misc
 *.orig.*
