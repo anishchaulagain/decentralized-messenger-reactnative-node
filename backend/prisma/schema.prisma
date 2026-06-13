@@ -53,6 +53,10 @@ model User {
   // searched) but the row and its data are retained. Hard delete removes the row.
   deletedAt DateTime?
 
+  // Last time the user's realtime connection dropped — shown as "last seen" to
+  // their contacts when they're offline. Null until their first disconnect.
+  lastSeenAt DateTime?
+
   // Admin moderation trail
   reviewedAt   DateTime?
   reviewedBy   User?         @relation("Reviewer", fields: [reviewedById], references: [id])

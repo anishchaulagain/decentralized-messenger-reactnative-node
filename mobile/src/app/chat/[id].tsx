@@ -18,10 +18,16 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Avatar } from '@/components/avatar';
 import { useAuth } from '@/context/auth';
 import { useCall } from '@/context/call';
-import { conversationsApi, type ConversationSummary, type PublicUser } from '@/lib/api';
+import {
+  conversationsApi,
+  type ConversationSummary,
+  type PresenceEvent,
+  type PublicUser,
+} from '@/lib/api';
 import { avatarUri } from '@/lib/avatar';
 import { encryptMessage } from '@/lib/crypto';
 import { decryptForMe } from '@/lib/messages';
+import { formatLastSeen } from '@/lib/presence';
 import { emitSocket, onSocket } from '@/lib/socket';
 import { Palette } from '@/constants/palette';
 
@@ -175,6 +181,10 @@ export default function ChatScreen() {
   const [editing, setEditing] = useState<DisplayMessage | null>(null);
   const [menuTarget, setMenuTarget] = useState<DisplayMessage | null>(null);
   const [otherTyping, setOtherTyping] = useState(false);
+  const [presence, setPresence] = useState<{ online: boolean; lastSeenAt: string | null }>({
+    online: false,
+    lastSeenAt: null,
+  });
   const [searchOpen, setSearchOpen] = useState(false);
   const [query, setQuery] = useState('');
 
@@ -237,13 +247,24 @@ export default function ChatScreen() {
       .list()
       .then(({ conversations }) => {
         const convo = conversations.find((c: ConversationSummary) => c.id === id);
-        if (active && convo) setContact(convo.contact);
+        if (active && convo) {
+          setContact(convo.contact);
+          setPresence({ online: convo.online, lastSeenAt: convo.lastSeenAt });
+        }
       })
       .catch(() => undefined);
     return () => {
       active = false;
     };
   }, [id]);
+
+  // Live presence for this contact.
+  useEffect(() => {
+    if (!contact?.id) return;
+    return onSocket('presence', (p: PresenceEvent) => {
+      if (p.userId === contact.id) setPresence({ online: p.online, lastSeenAt: p.lastSeenAt });
+    });
+  }, [contact?.id]);
 
   // Initial load + real-time updates via Socket.IO (no polling).
   useEffect(() => {
@@ -436,6 +457,19 @@ export default function ChatScreen() {
     ? messages.filter((m) => !m.deleted && m.text.toLowerCase().includes(query.trim().toLowerCase()))
     : messages;
 
+  // Header subtitle: typing > online > last seen > the E2EE trust line.
+  const subtitle = otherTyping
+    ? 'typing…'
+    : presence.online
+      ? 'online'
+      : presence.lastSeenAt
+        ? `last seen ${formatLastSeen(presence.lastSeenAt)}`
+        : 'End-to-end encrypted';
+  const subtitleColor =
+    otherTyping || presence.online || (!presence.lastSeenAt && !otherTyping)
+      ? Palette.tertiary
+      : Palette.outline;
+
   return (
     <SafeAreaView className="flex-1 bg-background">
       {/* Header */}
@@ -471,8 +505,12 @@ export default function ChatScreen() {
               <Text className="font-inter-semibold text-[17px] text-on-surface" numberOfLines={1}>
                 {contact?.name ?? 'Chat'}
               </Text>
-              <Text className="font-inter-semibold text-[11px] text-tertiary" numberOfLines={1}>
-                {otherTyping ? 'typing…' : 'End-to-end encrypted'}
+              <Text
+                className="font-inter-semibold text-[11px]"
+                style={{ color: subtitleColor }}
+                numberOfLines={1}
+              >
+                {subtitle}
               </Text>
             </View>
 

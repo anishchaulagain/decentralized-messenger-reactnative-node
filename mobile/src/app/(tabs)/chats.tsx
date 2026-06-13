@@ -24,16 +24,19 @@ import { Palette } from '@/constants/palette';
 function ChatRow({
   conversation,
   preview,
+  online,
   onPress,
 }: {
   conversation: ConversationSummary;
   preview: string;
+  online: boolean;
   onPress: () => void;
 }) {
   const hasUnread = conversation.unreadCount > 0;
   return (
     <Pressable onPress={onPress} className="flex-row items-center rounded-xl p-md active:bg-primary/5">
-      <Avatar uri={avatarUri(conversation.contact)} size={56} showStatus={false} />
+      {/* Green dot only when online — no grey dot to avoid clutter. */}
+      <Avatar uri={avatarUri(conversation.contact)} size={56} showStatus={online} online={online} />
       <View className="ml-md min-w-0 flex-1">
         <View className="mb-1 flex-row items-baseline justify-between">
           <Text className="flex-1 font-inter-bold text-[16px] text-on-surface" numberOfLines={1}>
@@ -67,6 +70,7 @@ export default function ChatsScreen() {
 
   const [conversations, setConversations] = useState<ConversationSummary[]>([]);
   const [previews, setPreviews] = useState<Record<string, string>>({});
+  const [presence, setPresence] = useState<Record<string, boolean>>({});
   const [incomingCount, setIncomingCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -82,6 +86,8 @@ export default function ChatsScreen() {
       ]);
       setConversations(list);
       setIncomingCount(requests.length);
+      // Seed presence from the server snapshot.
+      setPresence(Object.fromEntries(list.map((c) => [c.contact.id, c.online])));
 
       // Decrypt last-message previews.
       const entries = await Promise.all(
@@ -115,6 +121,9 @@ export default function ChatsScreen() {
       onSocket('request:new', () => load()),
       onSocket('request:accepted', () => load()),
       onSocket('connect', () => load()),
+      onSocket('presence', (p: { userId: string; online: boolean }) =>
+        setPresence((prev) => ({ ...prev, [p.userId]: p.online })),
+      ),
     ];
     return () => unsubs.forEach((off) => off());
   }, [load]);
@@ -206,6 +215,7 @@ export default function ChatsScreen() {
             <ChatRow
               conversation={item}
               preview={previews[item.id] ?? '🔒 Encrypted message'}
+              online={presence[item.contact.id] ?? item.online}
               onPress={() => router.push(`/chat/${item.id}`)}
             />
           )}

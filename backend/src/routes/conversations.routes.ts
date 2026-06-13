@@ -75,8 +75,8 @@ router.get(
       where: { OR: [{ userAId: me }, { userBId: me }] },
       orderBy: { updatedAt: 'desc' },
       include: {
-        userA: { select: publicUserSelect },
-        userB: { select: publicUserSelect },
+        userA: { select: { ...publicUserSelect, lastSeenAt: true } },
+        userB: { select: { ...publicUserSelect, lastSeenAt: true } },
         messages: { orderBy: { createdAt: 'desc' }, take: 1, select: messageSelect },
       },
     });
@@ -99,6 +99,8 @@ router.get(
       return {
         id: c.id,
         contact: toPublicUser(other),
+        online: isUserOnline(other.id),
+        lastSeenAt: other.lastSeenAt,
         lastMessage: c.messages[0] ?? null,
         unreadCount: unreadByConversation.get(c.id) ?? 0,
         updatedAt: c.updatedAt,
