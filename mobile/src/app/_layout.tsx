@@ -15,7 +15,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
 
 import { AuthProvider, useAuth } from '@/context/auth';
-import { conversationIdFromResponse } from '@/lib/notifications';
+import { notificationTargetFromResponse, type NotificationTarget } from '@/lib/notifications';
 import { Palette } from '@/constants/palette';
 
 SplashScreen.preventAutoHideAsync();
@@ -26,9 +26,9 @@ function RootNavigator() {
   const { session, ready } = useAuth();
   const segments = useSegments();
   const router = useRouter();
-  // Conversation a tapped notification wants to open; navigated once we're
-  // ready and signed in (chat is a protected route).
-  const [pendingChat, setPendingChat] = useState<string | null>(null);
+  // Where a tapped notification wants to go; navigated once we're ready and
+  // signed in (the targets are protected routes).
+  const [pendingTarget, setPendingTarget] = useState<NotificationTarget | null>(null);
 
   // Bounce out of protected screens if the session is gone (e.g. after logout).
   useEffect(() => {
@@ -39,26 +39,27 @@ function RootNavigator() {
     }
   }, [ready, session, segments, router]);
 
-  // Open the relevant chat when the user taps a message notification — both
-  // while the app is running and when it was launched cold by the tap.
+  // Route to the relevant screen when the user taps a notification — both while
+  // the app is running and when it was launched cold by the tap.
   useEffect(() => {
     const sub = Notifications.addNotificationResponseReceivedListener((response) => {
-      const id = conversationIdFromResponse(response);
-      if (id) setPendingChat(id);
+      const target = notificationTargetFromResponse(response);
+      if (target) setPendingTarget(target);
     });
     Notifications.getLastNotificationResponseAsync().then((response) => {
-      const id = conversationIdFromResponse(response);
-      if (id) setPendingChat(id);
+      const target = notificationTargetFromResponse(response);
+      if (target) setPendingTarget(target);
     });
     return () => sub.remove();
   }, []);
 
   useEffect(() => {
-    if (pendingChat && ready && session) {
-      router.push(`/chat/${pendingChat}`);
-      setPendingChat(null);
+    if (pendingTarget && ready && session) {
+      if (pendingTarget.kind === 'chat') router.push(`/chat/${pendingTarget.conversationId}`);
+      else router.push('/requests');
+      setPendingTarget(null);
     }
-  }, [pendingChat, ready, session, router]);
+  }, [pendingTarget, ready, session, router]);
 
   return (
     <Stack

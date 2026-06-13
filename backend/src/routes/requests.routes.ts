@@ -3,6 +3,8 @@ import { Router } from 'express';
 import { orderedPair } from '../lib/contacts';
 import { ApiError, asyncHandler } from '../lib/http-error';
 import { prisma } from '../lib/prisma';
+import { sendPushToUser } from '../lib/push';
+import { emitToUsers, isUserOnline } from '../lib/realtime';
 import { publicUserSelect, toPublicUser } from '../lib/serializers';
 import { authenticate, requireApproved } from '../middleware/auth';
 import { validateBody } from '../middleware/validate';
@@ -55,6 +57,18 @@ router.post(
           data: { status: 'PENDING' },
         })
       : await prisma.messageRequest.create({ data: { requesterId: me, recipientId } });
+
+    // Notify the recipient in real time (and via push if they're offline) so a
+    // new request surfaces immediately instead of only on screen refocus.
+    const requestForRecipient = { ...request, requester: toPublicUser(req.user!) };
+    emitToUsers([recipientId], 'request:new', { request: requestForRecipient });
+    if (!isUserOnline(recipientId)) {
+      void sendPushToUser(recipientId, {
+        title: req.user!.name,
+        body: 'sent you a message request',
+        data: { type: 'request' },
+      });
+    }
 
     res.status(201).json({
       message: 'Message request sent',
@@ -127,6 +141,19 @@ router.post(
         create: { userAId, userBId },
       }),
     ]);
+
+    // Let the original requester know their request was accepted so their UI can
+    // jump into the new conversation live (push if they're offline).
+    emitToUsers([request.requesterId], 'request:accepted', {
+      conversationId: conversation.id,
+    });
+    if (!isUserOnline(request.requesterId)) {
+      void sendPushToUser(request.requesterId, {
+        title: req.user!.name,
+        body: 'accepted your message request',
+        data: { type: 'request_accepted', conversationId: conversation.id },
+      });
+    }
 
     res.json({ message: 'Request accepted', conversation });
   }),
