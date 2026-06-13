@@ -18,7 +18,7 @@ expo-env.d.ts
 *.key
 *.mobileprovision
 eas.json
-
+chatapp-dipanx-firebase-adminsdk-fbsvc-d970a22ce4.json
 # Metro
 .metro-health-check*
 
