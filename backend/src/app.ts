@@ -7,6 +7,7 @@ import { errorHandler, notFound } from './middleware/error';
 import { authLimiter, generalLimiter } from './middleware/rate-limit';
 import adminRoutes from './routes/admin.routes';
 import authRoutes from './routes/auth.routes';
+import callRoutes from './routes/calls.routes';
 import conversationRoutes from './routes/conversations.routes';
 import requestRoutes from './routes/requests.routes';
 import userRoutes from './routes/users.routes';
@@ -36,6 +37,7 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/requests', requestRoutes);
 app.use('/api/conversations', conversationRoutes);
+app.use('/api/calls', callRoutes);
 
 app.use(notFound);
 app.use(errorHandler);

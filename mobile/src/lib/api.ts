@@ -231,6 +231,30 @@ export const usersApi = {
   getBackup: () => apiRequest<{ backup: string | null }>('GET', '/api/users/me/key-backup'),
 };
 
+export type CallType = 'AUDIO' | 'VIDEO';
+export type CallStatus = 'ANSWERED' | 'MISSED' | 'REJECTED' | 'CANCELED';
+
+export interface CallLogEntry {
+  id: string;
+  conversationId: string;
+  contact: PublicUser;
+  type: CallType;
+  status: CallStatus;
+  direction: 'outgoing' | 'incoming';
+  duration: number;
+  createdAt: string;
+}
+
+export const callsApi = {
+  list: () => apiRequest<{ calls: CallLogEntry[] }>('GET', '/api/calls'),
+  log: (entry: {
+    conversationId: string;
+    type: CallType;
+    status: CallStatus;
+    duration: number;
+  }) => apiRequest<{ call: { id: string } }>('POST', '/api/calls', entry),
+};
+
 export const notificationsApi = {
   register: (token: string, platform: string) =>
     apiRequest<{ ok: true }>('PUT', '/api/users/me/push-token', { token, platform }),

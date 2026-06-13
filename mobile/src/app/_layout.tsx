@@ -14,7 +14,9 @@ import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
 
+import { CallOverlay } from '@/components/call-overlay';
 import { AuthProvider, useAuth } from '@/context/auth';
+import { CallProvider } from '@/context/call';
 import { notificationTargetFromResponse, type NotificationTarget } from '@/lib/notifications';
 import { Palette } from '@/constants/palette';
 
@@ -100,8 +102,11 @@ export default function RootLayout() {
 
   return (
     <AuthProvider>
-      <StatusBar style="light" />
-      <RootNavigator />
+      <CallProvider>
+        <StatusBar style="light" />
+        <RootNavigator />
+        <CallOverlay />
+      </CallProvider>
     </AuthProvider>
   );
 }

@@ -5,8 +5,35 @@ import { Server } from 'socket.io';
 import { env } from '../config/env';
 import { verifyAccessToken } from './jwt';
 import { prisma } from './prisma';
+import { sendPushToUser } from './push';
 
 let io: Server | null = null;
+
+/** A relayed call-signaling message. Payloads (sdp/candidate) are opaque to us. */
+interface CallSignal {
+  conversationId?: string;
+  callId?: string;
+  callType?: 'audio' | 'video';
+  [key: string]: unknown;
+}
+
+/**
+ * Returns the other participant's id if `userId` belongs to the conversation,
+ * else null. Used to authorize and route relayed events (typing, calls).
+ */
+async function otherParticipant(
+  conversationId: string | undefined,
+  userId: string,
+): Promise<string | null> {
+  if (typeof conversationId !== 'string') return null;
+  const convo = await prisma.conversation.findUnique({
+    where: { id: conversationId },
+    select: { userAId: true, userBId: true },
+  });
+  if (!convo) return null;
+  if (convo.userAId !== userId && convo.userBId !== userId) return null;
+  return convo.userAId === userId ? convo.userBId : convo.userAId;
+}
 
 /**
  * Attaches an authenticated Socket.IO server to the HTTP server. Each client
@@ -30,13 +57,14 @@ export function initRealtime(server: HttpServer): Server {
       const payload = verifyAccessToken(token);
       const user = await prisma.user.findUnique({
         where: { id: payload.sub },
-        select: { id: true, status: true, deletedAt: true },
+        select: { id: true, name: true, status: true, deletedAt: true },
       });
       if (!user || user.deletedAt || user.status !== 'APPROVED') {
         return next(new Error('unauthorized'));
       }
 
       socket.data.userId = user.id;
+      socket.data.name = user.name;
       next();
     } catch {
       next(new Error('unauthorized'));
@@ -51,21 +79,50 @@ export function initRealtime(server: HttpServer): Server {
     // DB so a client can't spoof typing into a conversation it isn't part of.
     // Clients debounce these (start/stop only), so the per-event lookup is cheap.
     socket.on('typing', async (payload: { conversationId?: string; typing?: boolean }) => {
-      try {
-        const conversationId = payload?.conversationId;
-        if (typeof conversationId !== 'string') return;
-        const convo = await prisma.conversation.findUnique({
-          where: { id: conversationId },
-          select: { userAId: true, userBId: true },
+      const otherId = await otherParticipant(payload?.conversationId, userId);
+      if (otherId) {
+        io?.to(otherId).emit('typing', {
+          conversationId: payload!.conversationId,
+          userId,
+          typing: !!payload?.typing,
         });
-        if (!convo) return;
-        if (convo.userAId !== userId && convo.userBId !== userId) return;
-        const otherId = convo.userAId === userId ? convo.userBId : convo.userAId;
-        io?.to(otherId).emit('typing', { conversationId, userId, typing: !!payload?.typing });
-      } catch {
-        // best-effort; ignore
       }
     });
+
+    // --- Call signaling (WebRTC) ---
+    // The server is a blind relay: SDP offers/answers and ICE candidates are
+    // encrypted client-side with the recipient's key, so it forwards opaque
+    // blobs and can neither read nor tamper with them. It only checks that the
+    // sender is a participant of the conversation and routes by user id.
+    const relayCall = (event: string) => async (payload: CallSignal) => {
+      const otherId = await otherParticipant(payload?.conversationId, userId);
+      if (otherId) io?.to(otherId).emit(event, { ...payload, from: userId });
+    };
+
+    // Offer is special: if the callee has no live connection there's no one to
+    // ring — tell the caller and push a missed-call notification instead.
+    socket.on('call:offer', async (payload: CallSignal) => {
+      const otherId = await otherParticipant(payload?.conversationId, userId);
+      if (!otherId) return;
+      if (!isUserOnline(otherId)) {
+        io?.to(userId).emit('call:unavailable', {
+          conversationId: payload.conversationId,
+          callId: payload.callId,
+        });
+        void sendPushToUser(otherId, {
+          title: (socket.data.name as string) ?? 'Missed call',
+          body: payload.callType === 'video' ? 'Missed video call' : 'Missed voice call',
+          data: { conversationId: payload.conversationId, type: 'request' },
+        });
+        return;
+      }
+      io?.to(otherId).emit('call:incoming', { ...payload, from: userId });
+    });
+
+    socket.on('call:answer', relayCall('call:answer'));
+    socket.on('call:ice', relayCall('call:ice'));
+    socket.on('call:reject', relayCall('call:reject'));
+    socket.on('call:hangup', relayCall('call:hangup'));
   });
 
   return io;

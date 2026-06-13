@@ -17,6 +17,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Avatar } from '@/components/avatar';
 import { useAuth } from '@/context/auth';
+import { useCall } from '@/context/call';
 import { conversationsApi, type ConversationSummary, type PublicUser } from '@/lib/api';
 import { encryptMessage } from '@/lib/crypto';
 import { decryptForMe } from '@/lib/messages';
@@ -155,6 +156,7 @@ export default function ChatScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { session } = useAuth();
+  const call = useCall();
   const myId = session?.user.id ?? '';
 
   const [contact, setContact] = useState<PublicUser | null>(null);
@@ -413,6 +415,26 @@ export default function ChatScreen() {
                 {otherTyping ? 'typing…' : 'End-to-end encrypted'}
               </Text>
             </View>
+          </>
+        )}
+        {!searchOpen && (
+          <>
+            <Pressable
+              onPress={() => contact && id && call.startCall(id, contact, 'AUDIO')}
+              disabled={!contact?.publicKey}
+              className="h-10 w-10 items-center justify-center active:scale-90"
+              style={{ opacity: contact?.publicKey ? 1 : 0.4 }}
+            >
+              <MaterialIcons name="call" size={22} color={Palette.primary} />
+            </Pressable>
+            <Pressable
+              onPress={() => contact && id && call.startCall(id, contact, 'VIDEO')}
+              disabled={!contact?.publicKey}
+              className="h-10 w-10 items-center justify-center active:scale-90"
+              style={{ opacity: contact?.publicKey ? 1 : 0.4 }}
+            >
+              <MaterialIcons name="videocam" size={22} color={Palette.primary} />
+            </Pressable>
           </>
         )}
         <Pressable

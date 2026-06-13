@@ -64,6 +64,8 @@ model User {
   messages       Message[]      @relation("Sender")
   refreshTokens  RefreshToken[]
   pushTokens     PushToken[]
+  callsMade      CallLog[]      @relation("Caller")
+  callsReceived  CallLog[]      @relation("Callee")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -129,6 +131,7 @@ model Conversation {
   userBId String
 
   messages Message[]
+  calls    CallLog[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -192,4 +195,41 @@ model Reaction {
 
   @@unique([messageId, userId, emoji])
   @@index([messageId])
+}
+
+enum CallType {
+  AUDIO
+  VIDEO
+}
+
+enum CallStatus {
+  ANSWERED // connected and ended normally
+  MISSED // callee never picked up (or was offline)
+  REJECTED // callee declined
+  CANCELED // caller hung up before it connected
+}
+
+// A record of a 1:1 call. Calls are peer-to-peer and end-to-end encrypted — the
+// server never sees media; this is just metadata for the call history. Logged
+// by the caller's client when the call ends; both participants read it (the row
+// serves both, with direction derived from caller/callee).
+model CallLog {
+  id             String       @id @default(uuid())
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  conversationId String
+  caller         User         @relation("Caller", fields: [callerId], references: [id], onDelete: Cascade)
+  callerId       String
+  callee         User         @relation("Callee", fields: [calleeId], references: [id], onDelete: Cascade)
+  calleeId       String
+
+  type     CallType
+  status   CallStatus
+  // Seconds of connected talk time (0 for missed/rejected/canceled).
+  duration Int        @default(0)
+
+  createdAt DateTime @default(now())
+
+  @@index([conversationId, createdAt])
+  @@index([callerId])
+  @@index([calleeId])
 }

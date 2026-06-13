@@ -96,6 +96,17 @@ export const reactionSchema = z.object({
   emoji: z.string().min(1, 'emoji is required').max(16, 'emoji too long'),
 });
 
+// --- Calls ---
+
+// Recorded by the caller's client when a 1:1 call ends. The server derives the
+// callee from the conversation; media itself never touches the server.
+export const createCallLogSchema = z.object({
+  conversationId: z.uuid(),
+  type: z.enum(['AUDIO', 'VIDEO']),
+  status: z.enum(['ANSWERED', 'MISSED', 'REJECTED', 'CANCELED']),
+  duration: z.coerce.number().int().min(0).max(60 * 60 * 24).default(0),
+});
+
 // --- Push notifications ---
 
 // An Expo push token, e.g. ExponentPushToken[xxxxxxxxxxxxxxxxxxxxxx].
