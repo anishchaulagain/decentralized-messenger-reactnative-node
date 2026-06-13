@@ -1,11 +1,12 @@
 import { MaterialIcons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Avatar } from '@/components/avatar';
 import { requestsApi, type MessageRequest } from '@/lib/api';
+import { onSocket } from '@/lib/socket';
 import { Palette } from '@/constants/palette';
 
 export default function RequestsScreen() {
@@ -30,6 +31,15 @@ export default function RequestsScreen() {
       load();
     }, [load]),
   );
+
+  // Live-refresh while the screen is open if a request arrives or is answered.
+  useEffect(() => {
+    const unsubs = [
+      onSocket('request:new', () => load()),
+      onSocket('request:accepted', () => load()),
+    ];
+    return () => unsubs.forEach((off) => off());
+  }, [load]);
 
   const accept = async (req: MessageRequest) => {
     setBusyId(req.id);

@@ -105,16 +105,17 @@ export default function ChatsScreen() {
     }, [load]),
   );
 
-  // Live updates: refresh the list when a message arrives/changes or on (re)connect.
+  // Live updates: refresh on new/changed messages, incoming or accepted
+  // requests, or on (re)connect.
   useEffect(() => {
-    const unsubNew = onSocket('message:new', () => load());
-    const unsubUpdated = onSocket('message:updated', () => load());
-    const unsubConnect = onSocket('connect', () => load());
-    return () => {
-      unsubNew();
-      unsubUpdated();
-      unsubConnect();
-    };
+    const unsubs = [
+      onSocket('message:new', () => load()),
+      onSocket('message:updated', () => load()),
+      onSocket('request:new', () => load()),
+      onSocket('request:accepted', () => load()),
+      onSocket('connect', () => load()),
+    ];
+    return () => unsubs.forEach((off) => off());
   }, [load]);
 
   const q = query.trim().toLowerCase();

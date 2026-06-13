@@ -86,12 +86,20 @@ export async function unregisterPushNotifications(): Promise<void> {
   }
 }
 
-/** The conversation id carried by a tapped notification, if any. */
-export function conversationIdFromResponse(
+export type NotificationTarget =
+  | { kind: 'chat'; conversationId: string }
+  | { kind: 'requests' };
+
+/** Where a tapped notification should take the user, if anywhere. */
+export function notificationTargetFromResponse(
   response: Notifications.NotificationResponse | null,
-): string | null {
+): NotificationTarget | null {
   const data = response?.notification.request.content.data as
-    | { conversationId?: string }
+    | { conversationId?: string; type?: string }
     | undefined;
-  return data?.conversationId ?? null;
+  if (!data) return null;
+  // A message or an accepted request both carry a conversation to open.
+  if (data.conversationId) return { kind: 'chat', conversationId: data.conversationId };
+  if (data.type === 'request') return { kind: 'requests' };
+  return null;
 }
