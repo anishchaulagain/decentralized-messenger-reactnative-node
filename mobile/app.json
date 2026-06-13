@@ -49,6 +49,12 @@
           "cameraPermission": "Dipanix uses your camera for video calls.",
           "microphonePermission": "Dipanix uses your microphone for voice and video calls."
         }
+      ],
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "Dipanix uses Face ID to unlock the app."
+        }
       ]
     ],
     "experiments": {

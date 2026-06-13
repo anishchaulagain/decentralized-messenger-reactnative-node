@@ -1,10 +1,18 @@
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { Alert, Pressable, ScrollView, Switch, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Avatar } from '@/components/avatar';
 import { useAuth } from '@/context/auth';
+import {
+  authenticate,
+  biometricLabel,
+  isBiometricAvailable,
+  isBiometricLockEnabled,
+  setBiometricLockEnabled,
+} from '@/lib/biometrics';
 import { Palette } from '@/constants/palette';
 
 interface ItemProps {
@@ -39,10 +47,103 @@ function Item({ icon, tint, tintBg, label, description, divider = true, onPress 
   );
 }
 
+function ToggleItem({
+  icon,
+  tint,
+  tintBg,
+  label,
+  description,
+  value,
+  onValueChange,
+  disabled = false,
+  divider = true,
+}: {
+  icon: keyof typeof MaterialIcons.glyphMap;
+  tint: string;
+  tintBg: string;
+  label: string;
+  description?: string;
+  value: boolean;
+  onValueChange: (v: boolean) => void;
+  disabled?: boolean;
+  divider?: boolean;
+}) {
+  return (
+    <>
+      <View className="flex-row items-center justify-between p-md" style={{ opacity: disabled ? 0.5 : 1 }}>
+        <View className="flex-1 flex-row items-center gap-md">
+          <View className="h-10 w-10 items-center justify-center rounded-lg" style={{ backgroundColor: tintBg }}>
+            <MaterialIcons name={icon} size={22} color={tint} />
+          </View>
+          <View className="flex-1">
+            <Text className="font-inter text-[16px] text-on-surface">{label}</Text>
+            {description && (
+              <Text className="font-inter-semibold text-[12px] text-outline">{description}</Text>
+            )}
+          </View>
+        </View>
+        <Switch
+          value={value}
+          onValueChange={onValueChange}
+          disabled={disabled}
+          trackColor={{ false: Palette.surfaceContainerHighest, true: Palette.primaryContainer }}
+          thumbColor={value ? Palette.primary : '#f4f3f4'}
+        />
+      </View>
+      {divider && <View className="ml-16 h-px bg-white/5" />}
+    </>
+  );
+}
+
 export default function SettingsScreen() {
   const router = useRouter();
   const { session, signOut } = useAuth();
   const user = session?.user;
+
+  const [bioAvailable, setBioAvailable] = useState(false);
+  const [bioEnabled, setBioEnabled] = useState(false);
+  const [bioLabel, setBioLabel] = useState('Biometrics');
+  const [bioBusy, setBioBusy] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      const [available, enabled, label] = await Promise.all([
+        isBiometricAvailable(),
+        isBiometricLockEnabled(),
+        biometricLabel(),
+      ]);
+      if (!active) return;
+      setBioAvailable(available);
+      setBioEnabled(enabled);
+      setBioLabel(label);
+    })();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const toggleBiometrics = async (next: boolean) => {
+    if (bioBusy) return;
+    setBioBusy(true);
+    try {
+      if (next) {
+        // Confirm the user can pass the check before turning the lock on, so
+        // they can't accidentally lock themselves out.
+        const ok = await authenticate(`Confirm ${bioLabel} to enable app lock`);
+        if (!ok) return;
+        await setBiometricLockEnabled(true);
+        setBioEnabled(true);
+      } else {
+        await setBiometricLockEnabled(false);
+        setBioEnabled(false);
+      }
+    } catch {
+      Alert.alert('Biometrics', 'Could not update the app lock setting.');
+    } finally {
+      setBioBusy(false);
+    }
+  };
 
   const handleLogout = async () => {
     await signOut();
@@ -75,6 +176,20 @@ export default function SettingsScreen() {
             label="Encryption backup"
             description="Recover your key & history after reinstall"
             onPress={() => router.push('/backup-key')}
+          />
+          <ToggleItem
+            icon="fingerprint"
+            tint={Palette.secondary}
+            tintBg="rgba(208,188,255,0.1)"
+            label="App lock"
+            description={
+              bioAvailable
+                ? `Require ${bioLabel} to open the app`
+                : 'No biometrics enrolled on this device'
+            }
+            value={bioEnabled}
+            onValueChange={toggleBiometrics}
+            disabled={!bioAvailable || bioBusy}
           />
           <Item
             icon="lock"

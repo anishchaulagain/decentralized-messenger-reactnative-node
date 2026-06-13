@@ -14,6 +14,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
 
+import { AppLock } from '@/components/app-lock';
 import { CallOverlay } from '@/components/call-overlay';
 import { AuthProvider, useAuth } from '@/context/auth';
 import { CallProvider } from '@/context/call';
@@ -106,6 +107,7 @@ export default function RootLayout() {
         <StatusBar style="light" />
         <RootNavigator />
         <CallOverlay />
+        <AppLock />
       </CallProvider>
     </AuthProvider>
   );
