@@ -6,7 +6,10 @@ import { decryptMessage } from './crypto';
  * recipient's key for messages we sent, and the sender's key for ones we received.
  */
 export async function decryptForMe(
-  message: EncryptedMessage,
+  message: Pick<
+    EncryptedMessage,
+    'senderId' | 'ciphertext' | 'nonce' | 'senderPublicKey' | 'recipientPublicKey'
+  >,
   myUserId: string,
 ): Promise<string | null> {
   const counterpartyKey =

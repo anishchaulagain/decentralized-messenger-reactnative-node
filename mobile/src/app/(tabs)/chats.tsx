@@ -2,7 +2,15 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, FlatList, Pressable, RefreshControl, Text, View } from 'react-native';
+import {
+  ActivityIndicator,
+  FlatList,
+  Pressable,
+  RefreshControl,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Avatar } from '@/components/avatar';
@@ -62,6 +70,7 @@ export default function ChatsScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [query, setQuery] = useState('');
 
   const load = useCallback(async () => {
     try {
@@ -96,15 +105,26 @@ export default function ChatsScreen() {
     }, [load]),
   );
 
-  // Live updates: refresh the list when a message arrives or on (re)connect.
+  // Live updates: refresh the list when a message arrives/changes or on (re)connect.
   useEffect(() => {
     const unsubNew = onSocket('message:new', () => load());
+    const unsubUpdated = onSocket('message:updated', () => load());
     const unsubConnect = onSocket('connect', () => load());
     return () => {
       unsubNew();
+      unsubUpdated();
       unsubConnect();
     };
   }, [load]);
+
+  const q = query.trim().toLowerCase();
+  const visible = q
+    ? conversations.filter(
+        (c) =>
+          c.contact.name.toLowerCase().includes(q) ||
+          (previews[c.id] ?? '').toLowerCase().includes(q),
+      )
+    : conversations;
 
   const onRefresh = () => {
     setRefreshing(true);
@@ -137,13 +157,34 @@ export default function ChatsScreen() {
         </View>
       </View>
 
+      {/* Search existing conversations */}
+      {!loading && conversations.length > 0 && (
+        <View className="px-container-padding pb-xs pt-sm">
+          <View className="h-11 flex-row items-center gap-sm rounded-full border border-white/5 bg-surface-container-lowest px-md">
+            <MaterialIcons name="search" size={18} color={Palette.outline} />
+            <TextInput
+              className="flex-1 font-inter text-[15px] text-on-surface"
+              placeholder="Search conversations…"
+              placeholderTextColor={Palette.outline}
+              value={query}
+              onChangeText={setQuery}
+            />
+            {query.length > 0 && (
+              <Pressable onPress={() => setQuery('')} className="active:scale-90">
+                <MaterialIcons name="close" size={18} color={Palette.outline} />
+              </Pressable>
+            )}
+          </View>
+        </View>
+      )}
+
       {loading ? (
         <View className="flex-1 items-center justify-center">
           <ActivityIndicator color={Palette.primary} />
         </View>
       ) : (
         <FlatList
-          data={conversations}
+          data={visible}
           keyExtractor={(item) => item.id}
           contentContainerClassName="px-xs pb-28 pt-sm"
           refreshControl={
@@ -153,7 +194,9 @@ export default function ChatsScreen() {
             <View className="mt-32 items-center px-xl">
               <MaterialIcons name="forum" size={40} color={Palette.outline} />
               <Text className="mt-md text-center font-inter text-[15px] text-on-surface-variant">
-                {error ?? 'No conversations yet. Tap search to find someone by email.'}
+                {q
+                  ? 'No conversations match your search.'
+                  : (error ?? 'No conversations yet. Tap search to find someone by email.')}
               </Text>
             </View>
           }

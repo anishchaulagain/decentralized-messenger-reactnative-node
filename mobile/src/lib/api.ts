@@ -100,6 +100,22 @@ export type Relationship =
   | { status: 'request_received'; requestId: string }
   | { status: 'connected'; conversationId: string };
 
+export interface Reaction {
+  userId: string;
+  emoji: string;
+}
+
+/** The minimal shape of a quoted (reply-to) message, enough to decrypt a preview. */
+export interface ReplyPreview {
+  id: string;
+  senderId: string;
+  ciphertext: string;
+  nonce: string;
+  senderPublicKey: string;
+  recipientPublicKey: string;
+  deletedAt: string | null;
+}
+
 export interface EncryptedMessage {
   id: string;
   senderId: string;
@@ -108,6 +124,11 @@ export interface EncryptedMessage {
   senderPublicKey: string;
   recipientPublicKey: string;
   readAt: string | null;
+  editedAt: string | null;
+  deletedAt: string | null;
+  replyToId: string | null;
+  replyTo: ReplyPreview | null;
+  reactions: Reaction[];
   createdAt: string;
 }
 
@@ -181,10 +202,27 @@ export const conversationsApi = {
   list: () => apiRequest<{ conversations: ConversationSummary[] }>('GET', '/api/conversations'),
   messages: (id: string) =>
     apiRequest<{ messages: EncryptedMessage[] }>('GET', `/api/conversations/${id}/messages`),
-  send: (id: string, ciphertext: string, nonce: string) =>
+  send: (id: string, ciphertext: string, nonce: string, replyToId?: string) =>
     apiRequest<{ message: EncryptedMessage }>(
       'POST',
       `/api/conversations/${id}/messages`,
+      { ciphertext, nonce, replyToId },
+    ),
+  edit: (id: string, messageId: string, ciphertext: string, nonce: string) =>
+    apiRequest<{ message: EncryptedMessage }>(
+      'PATCH',
+      `/api/conversations/${id}/messages/${messageId}`,
       { ciphertext, nonce },
+    ),
+  remove: (id: string, messageId: string) =>
+    apiRequest<{ message: EncryptedMessage | null }>(
+      'DELETE',
+      `/api/conversations/${id}/messages/${messageId}`,
+    ),
+  react: (id: string, messageId: string, emoji: string) =>
+    apiRequest<{ message: EncryptedMessage }>(
+      'PUT',
+      `/api/conversations/${id}/messages/${messageId}/reactions`,
+      { emoji },
     ),
 };

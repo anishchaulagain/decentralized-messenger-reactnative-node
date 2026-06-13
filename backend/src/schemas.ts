@@ -81,6 +81,19 @@ export const keyBackupSchema = z.object({
 export const sendMessageSchema = z.object({
   ciphertext: base64.max(8000, 'Ciphertext too large'),
   nonce: base64OfBytes(24, 'nonce'),
+  // Optional id of the message this one quotes/replies to.
+  replyToId: z.uuid().optional(),
+});
+
+// Editing replaces the encrypted body (client re-encrypts the new text).
+export const editMessageSchema = z.object({
+  ciphertext: base64.max(8000, 'Ciphertext too large'),
+  nonce: base64OfBytes(24, 'nonce'),
+});
+
+// Toggling an emoji reaction. The emoji is short but may be multi-codepoint.
+export const reactionSchema = z.object({
+  emoji: z.string().min(1, 'emoji is required').max(16, 'emoji too long'),
 });
 
 // --- Push notifications ---

@@ -93,8 +93,11 @@ on logout. Reusing a rotated token revokes the whole chain (theft protection).
 | Method | Path | Body | Notes |
 |---|---|---|---|
 | `GET` | `/api/conversations` | — | My conversations + last (encrypted) message + unread count |
-| `GET` | `/api/conversations/:id/messages` | — | Encrypted messages (marks incoming as read) |
-| `POST` | `/api/conversations/:id/messages` | `{ ciphertext, nonce }` | Send an encrypted message (client encrypts first) |
+| `GET` | `/api/conversations/:id/messages` | — | Encrypted messages (marks incoming as read) incl. reactions, reply preview, edited/deleted flags |
+| `POST` | `/api/conversations/:id/messages` | `{ ciphertext, nonce, replyToId? }` | Send an encrypted message; `replyToId` quotes another message |
+| `PATCH` | `/api/conversations/:id/messages/:messageId` | `{ ciphertext, nonce }` | Edit your own message (re-encrypted body); stamps `editedAt` |
+| `DELETE` | `/api/conversations/:id/messages/:messageId` | — | Unsend your own message (blanks ciphertext, tombstones it) |
+| `PUT` | `/api/conversations/:id/messages/:messageId/reactions` | `{ emoji }` | Toggle an emoji reaction (emoji stored in clear) |
 
 ## Push notifications
 
@@ -228,7 +231,12 @@ JWT access token (`auth: { token }`), which is verified at handshake; each clien
 joins a room named by its user id. On send, the server pushes:
 
 - `message:new` → `{ conversationId, message }` (the encrypted message) to both participants.
+- `message:updated` → `{ conversationId, message }` when a message is edited, deleted, or reacted to.
 - `messages:read` → `{ conversationId, readerId }` to the sender when the recipient reads.
+
+Clients may also **emit** `typing` → `{ conversationId, typing }`; the server validates
+participation and relays `typing` → `{ conversationId, userId, typing }` to the other
+participant (debounced client-side, not persisted).
 
 The socket lives alongside Express on the same port (`src/lib/realtime.ts`). The smoke
 test verifies live delivery end-to-end (and that an invalid token is rejected).
