@@ -44,7 +44,28 @@ export function initRealtime(server: HttpServer): Server {
   });
 
   io.on('connection', (socket) => {
-    socket.join(socket.data.userId as string);
+    const userId = socket.data.userId as string;
+    socket.join(userId);
+
+    // Relay typing indicators to the other participant. Validated against the
+    // DB so a client can't spoof typing into a conversation it isn't part of.
+    // Clients debounce these (start/stop only), so the per-event lookup is cheap.
+    socket.on('typing', async (payload: { conversationId?: string; typing?: boolean }) => {
+      try {
+        const conversationId = payload?.conversationId;
+        if (typeof conversationId !== 'string') return;
+        const convo = await prisma.conversation.findUnique({
+          where: { id: conversationId },
+          select: { userAId: true, userBId: true },
+        });
+        if (!convo) return;
+        if (convo.userAId !== userId && convo.userBId !== userId) return;
+        const otherId = convo.userAId === userId ? convo.userBId : convo.userAId;
+        io?.to(otherId).emit('typing', { conversationId, userId, typing: !!payload?.typing });
+      } catch {
+        // best-effort; ignore
+      }
+    });
   });
 
   return io;

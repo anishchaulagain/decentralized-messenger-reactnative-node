@@ -57,6 +57,7 @@ model User {
 
   sentRequests     MessageRequest[] @relation("Requester")
   receivedRequests MessageRequest[] @relation("Recipient")
+  reactions        Reaction[]
 
   conversationsA Conversation[] @relation("UserA")
   conversationsB Conversation[] @relation("UserB")
@@ -157,7 +158,38 @@ model Message {
 
   readAt DateTime?
 
+  // Set when the sender edits the message (ciphertext/nonce are replaced).
+  editedAt DateTime?
+  // Set when the sender unsends the message. The ciphertext/nonce are blanked
+  // so the content is gone for everyone; clients render a "deleted" tombstone.
+  deletedAt DateTime?
+
+  // Optional message this one is a reply to (quoted). SetNull so deleting the
+  // quoted message doesn't cascade-delete the replies.
+  replyToId String?
+  replyTo   Message?  @relation("MessageReply", fields: [replyToId], references: [id], onDelete: SetNull)
+  replies   Message[] @relation("MessageReply")
+
+  reactions Reaction[]
+
   createdAt DateTime @default(now())
 
   @@index([conversationId, createdAt])
+}
+
+// An emoji reaction by one user on one message. A user may add several distinct
+// emojis to the same message; re-sending the same emoji toggles it off. The
+// emoji is stored in the clear (a minor metadata exposure vs. the encrypted
+// message body) to keep aggregation simple.
+model Reaction {
+  id        String   @id @default(uuid())
+  message   Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  messageId String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  emoji     String
+  createdAt DateTime @default(now())
+
+  @@unique([messageId, userId, emoji])
+  @@index([messageId])
 }
