@@ -43,6 +43,30 @@ export async function getPublicKey(): Promise<string> {
   return (await getOrCreateKeyPair()).publicKey;
 }
 
+/**
+ * A human-readable "safety number" derived from both participants' public keys
+ * (SHA-512, order-independent). Both devices compute the same value; the two
+ * people compare it out-of-band. If it matches, no one (not even the server)
+ * swapped a key in the middle — the conversation is verifiably E2E encrypted.
+ *
+ * Returns 12 groups of 5 digits (60 digits), like Signal's safety number.
+ */
+export function safetyNumber(publicKeyA: string, publicKeyB: string): string {
+  const [k1, k2] = [publicKeyA, publicKeyB].sort(); // canonical order
+  const combined = new Uint8Array([...decodeBase64(k1), ...decodeBase64(k2)]);
+  const digest = nacl.hash(combined); // 64-byte SHA-512
+
+  const groups: string[] = [];
+  for (let i = 0; i < 12; i += 1) {
+    let n = 0;
+    for (let j = 0; j < 5; j += 1) {
+      n = n * 256 + digest[i * 5 + j];
+    }
+    groups.push(String(n % 100000).padStart(5, '0'));
+  }
+  return groups.join(' ');
+}
+
 export interface EncryptedPayload {
   ciphertext: string; // base64
   nonce: string; // base64

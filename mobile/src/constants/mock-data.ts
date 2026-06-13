@@ -26,6 +26,8 @@ export interface Conversation {
   online: boolean;
   isGroup?: boolean;
   members?: number;
+  // Base64 X25519 public key (placeholder until wired to the API).
+  publicKey: string;
 }
 
 export const CONVERSATIONS: Conversation[] = [
@@ -37,6 +39,7 @@ export const CONVERSATIONS: Conversation[] = [
     time: '12:45 PM',
     unread: 2,
     online: true,
+    publicKey: '+1MKODACs856ZuMLCAmv93l8Z5QuIh8PRF8jydFV3Co=',
   },
   {
     id: 'group',
@@ -48,6 +51,7 @@ export const CONVERSATIONS: Conversation[] = [
     online: true,
     isGroup: true,
     members: 8,
+    publicKey: 'KItFjJZd0L9A5KAdDDRaQJB/MikDShY/lTI/2PUGefE=',
   },
   {
     id: 'jordan',
@@ -57,6 +61,7 @@ export const CONVERSATIONS: Conversation[] = [
     time: '10:20 AM',
     unread: 0,
     online: false,
+    publicKey: 'khdpknbZV85XYF5Ove4tPt1J8gijEYGky/k8TigPZk4=',
   },
   {
     id: 'nova',
@@ -66,6 +71,7 @@ export const CONVERSATIONS: Conversation[] = [
     time: 'Yesterday',
     unread: 1,
     online: true,
+    publicKey: 'PkbPqpJgLmx5obn2/+9zK4IBBf6TjeMyCiBsnoOnYjg=',
   },
   {
     id: 'elena',
@@ -75,6 +81,7 @@ export const CONVERSATIONS: Conversation[] = [
     time: 'Yesterday',
     unread: 0,
     online: false,
+    publicKey: '+kbiZk14bK9yT1c2BV3mdMKDyd8+reDLEupMCM10758=',
   },
   {
     id: 'marcus',
@@ -84,6 +91,7 @@ export const CONVERSATIONS: Conversation[] = [
     time: 'Aug 22',
     unread: 0,
     online: true,
+    publicKey: 'dMt6QpCR5ARD3IV9hp8FcN2Ky+EfScdq2ToTGCWwNQg=',
   },
 ];
 
