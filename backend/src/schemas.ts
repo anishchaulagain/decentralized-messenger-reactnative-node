@@ -82,3 +82,17 @@ export const sendMessageSchema = z.object({
   ciphertext: base64.max(8000, 'Ciphertext too large'),
   nonce: base64OfBytes(24, 'nonce'),
 });
+
+// --- Push notifications ---
+
+// An Expo push token, e.g. ExponentPushToken[xxxxxxxxxxxxxxxxxxxxxx].
+export const registerPushTokenSchema = z.object({
+  token: z
+    .string()
+    .regex(/^Expo(nent)?PushToken\[[^\]]+\]$/, 'Must be a valid Expo push token'),
+  platform: z.enum(['ios', 'android', 'web']).optional(),
+});
+
+export const unregisterPushTokenSchema = z.object({
+  token: z.string().min(1, 'token is required'),
+});

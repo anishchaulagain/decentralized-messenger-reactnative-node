@@ -36,7 +36,13 @@
           "imageWidth": 120
         }
       ],
-      "expo-secure-store"
+      "expo-secure-store",
+      [
+        "expo-notifications",
+        {
+          "color": "#adc6ff"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

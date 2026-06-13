@@ -2,7 +2,8 @@ import { Router } from 'express';
 
 import { ApiError, asyncHandler } from '../lib/http-error';
 import { prisma } from '../lib/prisma';
-import { emitToUsers } from '../lib/realtime';
+import { sendPushToUser } from '../lib/push';
+import { emitToUsers, isUserOnline } from '../lib/realtime';
 import { publicUserSelect, toPublicUser } from '../lib/serializers';
 import { authenticate, requireApproved } from '../middleware/auth';
 import { validateBody } from '../middleware/validate';
@@ -123,7 +124,7 @@ router.post(
 
     const otherId = conversation.userAId === me ? conversation.userBId : conversation.userAId;
     const [sender, recipient] = await Promise.all([
-      prisma.user.findUnique({ where: { id: me }, select: { publicKey: true } }),
+      prisma.user.findUnique({ where: { id: me }, select: { publicKey: true, name: true } }),
       prisma.user.findUnique({ where: { id: otherId }, select: { publicKey: true } }),
     ]);
 
@@ -153,6 +154,19 @@ router.post(
 
     // Push the new (encrypted) message to both participants in real time.
     emitToUsers([me, otherId], 'message:new', { conversationId: id, message });
+
+    // If the recipient has no live connection, the realtime event won't reach
+    // them — fall back to a push notification. Content stays generic because the
+    // server can't decrypt the message; the title is the sender's name and the
+    // payload carries the conversation id for deep-linking. Fire-and-forget so a
+    // push failure never affects the send response.
+    if (!isUserOnline(otherId)) {
+      void sendPushToUser(otherId, {
+        title: sender?.name ?? 'New message',
+        body: 'Sent you a message',
+        data: { conversationId: id },
+      });
+    }
 
     res.status(201).json({ message });
   }),

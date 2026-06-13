@@ -160,6 +160,13 @@ export const usersApi = {
   getBackup: () => apiRequest<{ backup: string | null }>('GET', '/api/users/me/key-backup'),
 };
 
+export const notificationsApi = {
+  register: (token: string, platform: string) =>
+    apiRequest<{ ok: true }>('PUT', '/api/users/me/push-token', { token, platform }),
+  unregister: (token: string) =>
+    apiRequest<{ ok: true }>('DELETE', '/api/users/me/push-token', { token }),
+};
+
 export const requestsApi = {
   send: (recipientId: string) =>
     apiRequest<{ message: string }>('POST', '/api/requests', { recipientId }),

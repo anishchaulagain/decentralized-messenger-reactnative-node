@@ -16,6 +16,11 @@ const schema = z.object({
   // Rate-limit ceilings per IP per 15 minutes.
   AUTH_RATE_MAX: z.coerce.number().default(50),
   GENERAL_RATE_MAX: z.coerce.number().default(600),
+  // Optional Expo push "Enhanced Security" access token. When set, it is sent
+  // as a Bearer credential to the Expo push service so only your server can
+  // push to your app's tokens. Leave unset to use the default (unauthenticated)
+  // Expo push endpoint.
+  EXPO_ACCESS_TOKEN: z.string().optional(),
   // Used only by the seed script.
   ADMIN_USER_EMAIL: z.string().optional(),
   ADMIN_PASSWORD: z.string().optional(),

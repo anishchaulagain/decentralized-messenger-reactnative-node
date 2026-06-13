@@ -9,6 +9,10 @@ import {
   subscribe,
   type Session,
 } from '@/lib/session';
+import {
+  registerForPushNotifications,
+  unregisterPushNotifications,
+} from '@/lib/notifications';
 import { connectSocket, disconnectSocket } from '@/lib/socket';
 
 interface AuthContextValue {
@@ -38,6 +42,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     else disconnectSocket();
   }, [session]);
 
+  // Register this device for push notifications when a user signs in. Keyed on
+  // the user id so it doesn't re-run on every token refresh.
+  useEffect(() => {
+    if (session) void registerForPushNotifications();
+    // Intentionally keyed on the user id only — re-running on every token
+    // refresh would re-register needlessly.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session?.user.id]);
+
   const value = useMemo<AuthContextValue>(
     () => ({
       session,
@@ -54,7 +67,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       async signOut() {
         const s = getSession();
         if (s) {
-          // Best-effort revoke; clear locally regardless.
+          // Stop this device from receiving the signed-out user's pushes, then
+          // best-effort revoke. Clear locally regardless.
+          await unregisterPushNotifications();
           await authApi.logout(s.refreshToken).catch(() => undefined);
         }
         await clearSession();
