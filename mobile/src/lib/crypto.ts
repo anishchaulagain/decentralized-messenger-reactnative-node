@@ -115,6 +115,34 @@ export async function decryptMessage(
   return opened ? encodeUTF8(opened) : null;
 }
 
+/**
+ * Encrypts an arbitrary JSON value for a recipient (NaCl box, authenticated).
+ * Used for call signaling (SDP/ICE): the server relays the opaque ciphertext and
+ * can neither read nor forge it, so the call's DTLS fingerprint — carried inside
+ * the encrypted SDP — is bound to the same identity verified by the safety number.
+ */
+export async function encryptPayload(
+  value: unknown,
+  recipientPublicKey: string,
+): Promise<EncryptedPayload> {
+  return encryptMessage(JSON.stringify(value), recipientPublicKey);
+}
+
+/** Decrypts a JSON payload produced by encryptPayload. Returns null on failure. */
+export async function decryptPayload<T>(
+  ciphertext: string,
+  nonce: string,
+  counterpartyPublicKey: string,
+): Promise<T | null> {
+  const plain = await decryptMessage(ciphertext, nonce, counterpartyPublicKey);
+  if (plain == null) return null;
+  try {
+    return JSON.parse(plain) as T;
+  } catch {
+    return null;
+  }
+}
+
 // --- Encrypted key backup (survives reinstall / new device) ---
 //
 // The private key is encrypted under a key derived from a user-chosen recovery

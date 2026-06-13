@@ -42,6 +42,13 @@
         {
           "color": "#adc6ff"
         }
+      ],
+      [
+        "@config-plugins/react-native-webrtc",
+        {
+          "cameraPermission": "Dipanix uses your camera for video calls.",
+          "microphonePermission": "Dipanix uses your microphone for voice and video calls."
+        }
       ]
     ],
     "experiments": {

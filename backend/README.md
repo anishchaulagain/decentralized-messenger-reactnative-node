@@ -98,6 +98,8 @@ on logout. Reusing a rotated token revokes the whole chain (theft protection).
 | `PATCH` | `/api/conversations/:id/messages/:messageId` | `{ ciphertext, nonce }` | Edit your own message (re-encrypted body); stamps `editedAt` |
 | `DELETE` | `/api/conversations/:id/messages/:messageId` | — | Unsend your own message (blanks ciphertext, tombstones it) |
 | `PUT` | `/api/conversations/:id/messages/:messageId/reactions` | `{ emoji }` | Toggle an emoji reaction (emoji stored in clear) |
+| `GET` | `/api/calls` | — | My call history (as caller or callee), with the other party |
+| `POST` | `/api/calls` | `{ conversationId, type, status, duration }` | Record a finished call (logged by the caller's client) |
 
 ## Push notifications
 
@@ -238,8 +240,33 @@ Clients may also **emit** `typing` → `{ conversationId, typing }`; the server 
 participation and relays `typing` → `{ conversationId, userId, typing }` to the other
 participant (debounced client-side, not persisted).
 
+Requests notify live too: `request:new` (to the recipient) and `request:accepted` (to
+the requester), plus a push notification when the target is offline.
+
 The socket lives alongside Express on the same port (`src/lib/realtime.ts`). The smoke
 test verifies live delivery end-to-end (and that an invalid token is rejected).
+
+## Calls (WebRTC, 1:1 voice/video)
+
+Calls are **peer-to-peer**; the server only relays signaling and never sees media.
+
+- Media is encrypted by WebRTC itself (DTLS-SRTP) — even when relayed through a TURN
+  server, the relay forwards opaque SRTP it cannot decrypt.
+- **Signaling is also E2E-encrypted:** the client seals each SDP offer/answer and ICE
+  candidate with the peer's NaCl key before sending. The server relays opaque blobs via
+  Socket.IO, so it can neither read nor tamper with them — the DTLS fingerprint inside
+  the SDP is bound to the identity users verify with their safety number.
+- Signaling events (validated for conversation participation, then routed by user id):
+  `call:offer` → `call:incoming`, `call:answer`, `call:ice`, `call:reject`, `call:hangup`.
+  If the callee is offline, the caller gets `call:unavailable` and the callee a
+  missed-call push.
+- Call history is persisted (`CallLog`) via `POST /api/calls`, logged by the caller when
+  the call ends; both participants read the same row (direction derived from caller/callee).
+
+**Client requirements:** WebRTC needs a development/production build (not Expo Go), camera/
+mic permissions (configured via `@config-plugins/react-native-webrtc`), and ICE servers.
+A public STUN server covers same-network/friendly-NAT cases; a **TURN** relay is required
+for reliable cross-network connectivity (configure `EXPO_PUBLIC_TURN_URL` etc. on the app).
 
 ## Notes / next steps
 
