@@ -1,16 +1,6 @@
-import express, { Request, Response } from "express";
+import app from './app';
+import { env } from './config/env';
 
-const app = express();
-const PORT = 3000;
-
-app.use(express.json());
-
-app.get("/", (req: Request, res: Response) => {
-  res.json({
-    message: "Express + TypeScript is running!"
-  });
-});
-
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+app.listen(env.PORT, () => {
+  console.log(`Dipanix API listening on http://localhost:${env.PORT}`);
 });
