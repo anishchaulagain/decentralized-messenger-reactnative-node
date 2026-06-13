@@ -37,6 +37,9 @@ export async function authenticate(req: Request, _res: Response, next: NextFunct
     if (!user) {
       throw new ApiError(401, 'Account no longer exists');
     }
+    if (user.deletedAt) {
+      throw new ApiError(401, 'Account has been deactivated');
+    }
 
     req.user = user;
     next();

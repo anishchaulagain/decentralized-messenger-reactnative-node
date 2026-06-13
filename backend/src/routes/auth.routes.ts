@@ -64,6 +64,9 @@ router.post(
       throw new ApiError(401, 'Invalid email or password');
     }
 
+    if (user.deletedAt) {
+      throw new ApiError(403, 'Your account has been deactivated');
+    }
     if (user.status === 'PENDING') {
       throw new ApiError(403, 'Your account is pending admin approval');
     }
@@ -90,9 +93,9 @@ router.post(
       where: { id: userId },
       omit: { passwordHash: true },
     });
-    if (!user) {
+    if (!user || user.deletedAt) {
       await revokeRefreshToken(newRefreshToken);
-      throw new ApiError(401, 'Account no longer exists');
+      throw new ApiError(401, 'Account is no longer active');
     }
     if (user.status !== 'APPROVED') {
       await revokeRefreshToken(newRefreshToken);

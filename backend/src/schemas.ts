@@ -24,6 +24,28 @@ export const adminUserListQuery = z.object({
   search: z.string().trim().optional(),
 });
 
+export const adminCreateUserSchema = z.object({
+  name: z.string().trim().min(1, 'Name is required').max(80),
+  email,
+  password: z.string().min(8, 'Password must be at least 8 characters').max(128),
+  role: z.enum(['USER', 'ADMIN']).optional(),
+  status: z.enum(['PENDING', 'APPROVED', 'REJECTED']).optional(),
+});
+
+export const adminUpdateUserSchema = z
+  .object({
+    name: z.string().trim().min(1).max(80).optional(),
+    email: email.optional(),
+    password: z.string().min(8).max(128).optional(),
+    role: z.enum(['USER', 'ADMIN']).optional(),
+    status: z.enum(['PENDING', 'APPROVED', 'REJECTED']).optional(),
+  })
+  .refine((obj) => Object.keys(obj).length > 0, { message: 'No fields provided to update' });
+
+export const deleteUserQuery = z.object({
+  mode: z.enum(['soft', 'hard']).default('soft'),
+});
+
 export const userSearchQuery = z.object({
   email,
 });

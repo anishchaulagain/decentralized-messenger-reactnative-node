@@ -299,6 +299,36 @@ async function main() {
   );
   check('message history is readable after reinstall', recoveredText === plaintext2, recoveredText);
 
+  // --- Admin user management (create / update / soft + hard delete / restore) ---
+  const crudEmail = `crud+${stamp}@example.com`;
+  const created = await api('POST', '/api/admin/users', { name: 'Crud User', email: crudEmail, password: 'Password123!' }, adminToken);
+  check('admin creates an approved user', created.status === 201 && created.data.user.status === 'APPROVED', created.data);
+  const crudId = created.data.user.id as string;
+
+  const crudLogin = await api('POST', '/api/auth/login', { email: crudEmail, password: 'Password123!' });
+  check('admin-created user can log in', crudLogin.status === 200);
+
+  const updated = await api('PATCH', `/api/admin/users/${crudId}`, { name: 'Renamed User' }, adminToken);
+  check('admin updates a user', updated.status === 200 && updated.data.user.name === 'Renamed User', updated.data);
+
+  const soft = await api('DELETE', `/api/admin/users/${crudId}?mode=soft`, undefined, adminToken);
+  check('soft delete deactivates', soft.status === 200 && soft.data.mode === 'soft', soft.data);
+  const blockedLogin = await api('POST', '/api/auth/login', { email: crudEmail, password: 'Password123!' });
+  check('deactivated user cannot log in -> 403', blockedLogin.status === 403, blockedLogin.data);
+
+  const restoredUser = await api('POST', `/api/admin/users/${crudId}/restore`, {}, adminToken);
+  check('restore reactivates the user', restoredUser.status === 200 && restoredUser.data.user.deletedAt === null);
+  const reLogin = await api('POST', '/api/auth/login', { email: crudEmail, password: 'Password123!' });
+  check('restored user can log in', reLogin.status === 200);
+
+  const hard = await api('DELETE', `/api/admin/users/${crudId}?mode=hard`, undefined, adminToken);
+  check('hard delete removes the user', hard.status === 200 && hard.data.mode === 'hard');
+  const goneLogin = await api('POST', '/api/auth/login', { email: crudEmail, password: 'Password123!' });
+  check('hard-deleted user cannot log in', goneLogin.status === 401);
+
+  const selfDelete = await api('DELETE', `/api/admin/users/${adminLogin.data.user.id}?mode=hard`, undefined, adminToken);
+  check('admin cannot delete own account -> 400', selfDelete.status === 400);
+
   // --- Access / refresh token lifecycle ---
   const freshLogin = await api('POST', '/api/auth/login', { email: aliceEmail, password: pw });
   const r0 = freshLogin.data.refreshToken as string;

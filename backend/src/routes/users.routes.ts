@@ -59,7 +59,7 @@ router.get(
     const { email } = res.locals.query as { email: string };
 
     const user = await prisma.user.findUnique({ where: { email } });
-    if (!user || user.status !== 'APPROVED') {
+    if (!user || user.status !== 'APPROVED' || user.deletedAt) {
       throw new ApiError(404, 'No user found with that email');
     }
 
