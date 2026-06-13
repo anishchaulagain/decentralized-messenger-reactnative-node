@@ -1,10 +1,9 @@
 import { MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   KeyboardAvoidingView,
-  Platform,
   Pressable,
   ScrollView,
   Text,
@@ -15,12 +14,23 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Palette } from '@/constants/palette';
 
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 export default function LoginScreen() {
   const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+
+  const canSubmit = useMemo(
+    () => EMAIL_RE.test(email.trim()) && password.length >= 1,
+    [email, password],
+  );
 
   const signIn = () => {
+    if (!canSubmit) return;
+    // TODO: POST { email, password } to the auth API, store the returned JWT,
+    // then route into the app.
     router.replace('/(tabs)/chats');
   };
 
@@ -36,47 +46,62 @@ export default function LoginScreen() {
         style={{ transform: [{ scale: 1.4 }] }}
       />
 
-      <KeyboardAvoidingView
-        className="flex-1"
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      >
+      <KeyboardAvoidingView className="flex-1" behavior="padding">
         <ScrollView
           contentContainerClassName="flex-grow justify-center px-container-padding py-lg"
           keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
         >
           {/* Brand */}
           <View className="mb-xl items-center">
-            <View className="mb-md h-14 w-14 items-center justify-center rounded-xl border border-white/10 bg-surface-container-high shadow-lg">
-              <MaterialIcons name="hub" size={30} color={Palette.primary} />
-            </View>
-            <Text className="font-inter-bold text-[26px] tracking-tight text-on-surface">
+            <LinearGradient
+              colors={[Palette.primary, Palette.secondary]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={{
+                width: 64,
+                height: 64,
+                borderRadius: 18,
+                alignItems: 'center',
+                justifyContent: 'center',
+                marginBottom: 16,
+                shadowColor: Palette.primary,
+                shadowOpacity: 0.4,
+                shadowRadius: 20,
+                shadowOffset: { width: 0, height: 8 },
+                elevation: 10,
+              }}
+            >
+              <MaterialIcons name="hub" size={32} color={Palette.onPrimary} />
+            </LinearGradient>
+            <Text className="font-inter-bold text-[28px] tracking-tight text-on-surface">
               Dipanix
             </Text>
-            <Text className="mt-xs font-inter-semibold text-[12px] uppercase tracking-widest text-outline">
-              Autonomous Portal
+            <Text className="mt-xs font-inter text-[14px] text-on-surface-variant">
+              Secure, decentralized messaging
             </Text>
           </View>
 
-          {/* Glass card */}
+          {/* Card */}
           <View className="rounded-xl border border-white/10 bg-white/5 p-xl">
-            <Text className="font-inter-semibold text-[20px] text-on-surface">Welcome back</Text>
+            <Text className="font-inter-semibold text-[22px] text-on-surface">Welcome back</Text>
             <Text className="mt-xs font-inter text-[14px] text-on-surface-variant">
-              Access your cerebral command center.
+              Sign in to continue to your account.
             </Text>
 
             {/* Email */}
             <View className="mt-lg">
-              <Text className="ml-xs font-inter-semibold text-[12px] tracking-widest text-on-surface-variant">
-                SYSTEM ID (EMAIL)
-              </Text>
-              <View className="mt-xs flex-row items-center rounded-lg border border-white/10 bg-surface-container-lowest px-md">
-                <MaterialIcons name="alternate-email" size={18} color={Palette.outline} />
+              <Text className="ml-xs font-inter-medium text-[14px] text-on-surface">Email</Text>
+              <View className="mt-xs flex-row items-center rounded-lg border border-white/10 bg-surface-container-lowest px-md focus:border-primary">
+                <MaterialIcons name="mail-outline" size={20} color={Palette.outline} />
                 <TextInput
                   className="ml-sm flex-1 py-md font-inter text-[16px] text-on-surface"
-                  placeholder="name@nexus.com"
-                  placeholderTextColor={`${Palette.outline}80`}
+                  placeholder="you@example.com"
+                  placeholderTextColor={`${Palette.outline}99`}
                   keyboardType="email-address"
                   autoCapitalize="none"
+                  autoComplete="email"
+                  autoCorrect={false}
                   value={email}
                   onChangeText={setEmail}
                 />
@@ -86,67 +111,62 @@ export default function LoginScreen() {
             {/* Password */}
             <View className="mt-md">
               <View className="flex-row items-center justify-between px-xs">
-                <Text className="font-inter-semibold text-[12px] tracking-widest text-on-surface-variant">
-                  ACCESS KEY
-                </Text>
+                <Text className="font-inter-medium text-[14px] text-on-surface">Password</Text>
                 <Pressable hitSlop={8}>
-                  <Text className="font-inter-semibold text-[12px] text-primary">Forgot Key?</Text>
+                  <Text className="font-inter-medium text-[13px] text-primary">
+                    Forgot password?
+                  </Text>
                 </Pressable>
               </View>
               <View className="mt-xs flex-row items-center rounded-lg border border-white/10 bg-surface-container-lowest px-md">
-                <MaterialIcons name="lock" size={18} color={Palette.outline} />
+                <MaterialIcons name="lock-outline" size={20} color={Palette.outline} />
                 <TextInput
                   className="ml-sm flex-1 py-md font-inter text-[16px] text-on-surface"
-                  placeholder="••••••••"
-                  placeholderTextColor={`${Palette.outline}80`}
-                  secureTextEntry
+                  placeholder="Enter your password"
+                  placeholderTextColor={`${Palette.outline}99`}
+                  secureTextEntry={!showPassword}
+                  autoCapitalize="none"
+                  autoComplete="password"
                   value={password}
                   onChangeText={setPassword}
+                  onSubmitEditing={signIn}
+                  returnKeyType="go"
                 />
+                <Pressable hitSlop={8} onPress={() => setShowPassword((v) => !v)}>
+                  <MaterialIcons
+                    name={showPassword ? 'visibility-off' : 'visibility'}
+                    size={20}
+                    color={Palette.outline}
+                  />
+                </Pressable>
               </View>
             </View>
 
             {/* Sign in */}
-            <Pressable onPress={signIn} className="mt-lg active:scale-[0.98]">
+            <Pressable
+              onPress={signIn}
+              disabled={!canSubmit}
+              className="mt-lg active:scale-[0.98]"
+              style={{ opacity: canSubmit ? 1 : 0.5 }}
+            >
               <LinearGradient
-                colors={[Palette.primaryContainer, Palette.secondaryContainer]}
+                colors={[Palette.primaryContainer, Palette.tertiary]}
                 start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
+                end={{ x: 1, y: 0 }}
                 style={{ borderRadius: 8, paddingVertical: 16, alignItems: 'center' }}
               >
-                <Text className="font-inter-semibold text-[18px] text-white">Sign In</Text>
+                <Text className="font-inter-semibold text-[16px] text-white">Sign In</Text>
               </LinearGradient>
             </Pressable>
-
-            {/* Divider */}
-            <View className="mt-lg flex-row items-center gap-md">
-              <View className="h-px flex-1 bg-white/10" />
-              <Text className="font-mono text-[10px] uppercase text-outline">
-                External Authentication
-              </Text>
-              <View className="h-px flex-1 bg-white/10" />
-            </View>
-
-            {/* Social */}
-            <View className="mt-lg flex-row gap-md">
-              <Pressable className="flex-1 flex-row items-center justify-center gap-sm rounded-lg border border-white/10 py-md active:bg-white/5">
-                <MaterialIcons name="public" size={20} color={Palette.onSurface} />
-                <Text className="font-inter-semibold text-[12px] text-on-surface">Google</Text>
-              </Pressable>
-              <Pressable className="flex-1 flex-row items-center justify-center gap-sm rounded-lg border border-white/10 py-md active:bg-white/5">
-                <MaterialIcons name="apps" size={20} color={Palette.onSurface} />
-                <Text className="font-inter-semibold text-[12px] text-on-surface">Apple</Text>
-              </Pressable>
-            </View>
           </View>
 
           {/* Footer */}
           <View className="mt-xl flex-row items-center justify-center">
             <Text className="font-inter text-[14px] text-on-surface-variant">
-              New to the platform?{' '}
+              Don&apos;t have an account?{' '}
             </Text>
             <Pressable hitSlop={8}>
-              <Text className="font-inter-bold text-[13px] text-primary">Create Account</Text>
+              <Text className="font-inter-bold text-[14px] text-primary">Sign Up</Text>
             </Pressable>
           </View>
         </ScrollView>

@@ -6,7 +6,6 @@ import { useState } from 'react';
 import {
   FlatList,
   KeyboardAvoidingView,
-  Platform,
   Pressable,
   Text,
   TextInput,
@@ -170,11 +169,7 @@ export default function ChatScreen() {
         </View>
       </View>
 
-      <KeyboardAvoidingView
-        className="flex-1"
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={0}
-      >
+      <KeyboardAvoidingView className="flex-1" behavior="padding">
         {/* Messages */}
         <FlatList
           data={messages}
