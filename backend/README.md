@@ -66,6 +66,10 @@ on logout. Reusing a rotated token revokes the whole chain (theft protection).
 | `GET` | `/api/admin/users?status=PENDING&search=` | List/filter users |
 | `POST` | `/api/admin/users/:id/approve` | Approve an account |
 | `POST` | `/api/admin/users/:id/reject` | Reject an account |
+| `POST` | `/api/admin/users` | Create a user `{ name, email, password, role?, status? }` (defaults to an approved USER) |
+| `PATCH` | `/api/admin/users/:id` | Update any subset of `{ name, email, password, role, status }` |
+| `DELETE` | `/api/admin/users/:id?mode=soft\|hard` | `soft` (default) deactivates + retains the row; `hard` permanently deletes (cascades) |
+| `POST` | `/api/admin/users/:id/restore` | Restore a soft-deleted user |
 
 ### Users & requests (approved users)
 
@@ -151,7 +155,12 @@ the old key.
 
 ## Data model
 
-`User` (role `USER`/`ADMIN`, status `PENDING`/`APPROVED`/`REJECTED`), `MessageRequest`
+**Soft vs hard delete:** a soft-deleted user keeps their row (with `deletedAt` set) but
+is blocked from login, token refresh, and search, and their refresh tokens are revoked
+— reversible via `/restore`. A hard delete removes the row and cascades to their
+messages, requests, and conversations. Admins cannot delete their own account.
+
+`User` (role `USER`/`ADMIN`, status `PENDING`/`APPROVED`/`REJECTED`, soft-delete `deletedAt`), `MessageRequest`
 (`PENDING`/`ACCEPTED`/`REJECTED`), `Conversation` (one per user pair), `Message`,
 `RefreshToken` (hashed, rotating). See `prisma/schema.prisma`.
 

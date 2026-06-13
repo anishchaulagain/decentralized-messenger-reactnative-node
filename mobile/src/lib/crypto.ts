@@ -48,6 +48,12 @@ export async function getPublicKey(): Promise<string> {
   return (await getOrCreateKeyPair()).publicKey;
 }
 
+/** Whether a private key already exists on this device (without creating one). */
+export async function hasStoredKeyPair(): Promise<boolean> {
+  if (cached) return true;
+  return (await SecureStore.getItemAsync(SECRET_KEY_STORE)) !== null;
+}
+
 /**
  * A human-readable "safety number" derived from both participants' public keys
  * (SHA-512, order-independent). Both devices compute the same value; the two

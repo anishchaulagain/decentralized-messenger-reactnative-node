@@ -9,12 +9,14 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 
+import { useAuth } from '@/context/auth';
 import { Palette } from '@/constants/palette';
 
-const SPLASH_DURATION_MS = 2600;
+const SPLASH_DURATION_MS = 2200;
 
 export default function SplashScreen() {
   const router = useRouter();
+  const { session, ready } = useAuth();
   const spin = useSharedValue(0);
   const progress = useSharedValue(0);
   const pulse = useSharedValue(0.6);
@@ -29,12 +31,16 @@ export default function SplashScreen() {
       duration: SPLASH_DURATION_MS,
       easing: Easing.out(Easing.cubic),
     });
+  }, [progress, pulse, spin]);
 
+  // Route once the session has loaded (and the splash has shown briefly).
+  useEffect(() => {
+    if (!ready) return;
     const timer = setTimeout(() => {
-      router.replace('/login');
+      router.replace(session ? '/(tabs)/chats' : '/login');
     }, SPLASH_DURATION_MS);
     return () => clearTimeout(timer);
-  }, [progress, pulse, router, spin]);
+  }, [ready, session, router]);
 
   const ringStyle = useAnimatedStyle(() => ({
     transform: [{ rotate: `${spin.value + 45}deg` }],
