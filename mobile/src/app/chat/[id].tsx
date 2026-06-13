@@ -18,6 +18,7 @@ import { useAuth } from '@/context/auth';
 import { conversationsApi, type ConversationSummary, type PublicUser } from '@/lib/api';
 import { encryptMessage } from '@/lib/crypto';
 import { decryptForMe } from '@/lib/messages';
+import { onSocket } from '@/lib/socket';
 import { Palette } from '@/constants/palette';
 
 interface DisplayMessage {
@@ -111,18 +112,28 @@ export default function ChatScreen() {
     };
   }, [id]);
 
-  // Initial load + light polling for incoming messages while focused.
+  // Initial load + real-time updates via Socket.IO (no polling).
   useEffect(() => {
     let active = true;
     loadMessages().finally(() => {
       if (active) setLoading(false);
     });
-    const timer = setInterval(loadMessages, 4000);
+
+    const refreshIfMine = (payload: { conversationId?: string }) => {
+      if (payload?.conversationId === id) loadMessages();
+    };
+    const unsubNew = onSocket('message:new', refreshIfMine);
+    const unsubRead = onSocket('messages:read', refreshIfMine);
+    // Catch up on anything missed while disconnected.
+    const unsubConnect = onSocket('connect', () => loadMessages());
+
     return () => {
       active = false;
-      clearInterval(timer);
+      unsubNew();
+      unsubRead();
+      unsubConnect();
     };
-  }, [loadMessages]);
+  }, [loadMessages, id]);
 
   const send = async () => {
     const text = draft.trim();

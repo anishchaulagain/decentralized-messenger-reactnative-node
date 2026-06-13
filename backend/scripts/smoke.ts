@@ -8,6 +8,7 @@
 import 'dotenv/config';
 import { PrismaClient } from '@prisma/client';
 import { scrypt } from 'scrypt-js';
+import { io as socketClient, type Socket } from 'socket.io-client';
 import nacl from 'tweetnacl';
 import {
   decodeBase64,
@@ -34,6 +35,35 @@ async function restoreBackup(blobJson: string, passphrase: string): Promise<Uint
   const b = JSON.parse(blobJson);
   const key = new Uint8Array(await scrypt(decodeUTF8(passphrase.normalize('NFKC')), decodeBase64(b.salt), b.N, b.r, b.p, 32));
   return nacl.secretbox.open(decodeBase64(b.ciphertext), decodeBase64(b.nonce), key);
+}
+
+function connectSocket(token: string): Promise<Socket> {
+  const sock = socketClient(BASE, { transports: ['websocket'], auth: { token }, reconnection: false });
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('socket connect timeout')), 5000);
+    sock.on('connect', () => {
+      clearTimeout(timer);
+      resolve(sock);
+    });
+    sock.on('connect_error', (e) => {
+      clearTimeout(timer);
+      reject(e);
+    });
+  });
+}
+
+function waitForEvent(sock: Socket, event: string, ms: number): Promise<any | null> {
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => {
+      sock.off(event, handler);
+      resolve(null);
+    }, ms);
+    const handler = (payload: any) => {
+      clearTimeout(timer);
+      resolve(payload);
+    };
+    sock.on(event, handler);
+  });
 }
 
 // Client-side crypto, mirroring what the mobile app does (tweetnacl box).
@@ -263,6 +293,29 @@ async function main() {
   // Non-participant cannot read the conversation
   const adminPeek = await api('GET', `/api/conversations/${conversationId}/messages`, undefined, adminToken);
   check('non-participant blocked from messages -> 403/404', adminPeek.status === 403 || adminPeek.status === 404);
+
+  // --- Real-time delivery (Socket.IO) ---
+  // An unauthenticated socket must be rejected.
+  const badSocket = socketClient(BASE, { transports: ['websocket'], auth: { token: 'garbage' }, reconnection: false });
+  const badConnect = await new Promise<string>((resolve) => {
+    badSocket.on('connect', () => resolve('connected'));
+    badSocket.on('connect_error', () => resolve('rejected'));
+    setTimeout(() => resolve('timeout'), 4000);
+  });
+  check('socket rejects an invalid token', badConnect === 'rejected', badConnect);
+  badSocket.close();
+
+  // Bob connects; Alice sends via REST; Bob receives it in real time and decrypts it.
+  const bobSocket = await connectSocket(bobToken);
+  const rtIncoming = waitForEvent(bobSocket, 'message:new', 5000);
+  const rtPlain = 'Realtime hello — pushed over Socket.IO';
+  const rtEnc = encrypt(rtPlain, bobPublicKey, aliceKeys.secretKey);
+  await api('POST', `/api/conversations/${conversationId}/messages`, rtEnc, aliceToken);
+  const event = await rtIncoming;
+  check('Bob receives the message in real time', !!event && event.conversationId === conversationId, event);
+  const rtDecrypted = event && decrypt(event.message.ciphertext, event.message.nonce, event.message.senderPublicKey, bobKeys.secretKey);
+  check('the real-time message decrypts', rtDecrypted === rtPlain, rtDecrypted);
+  bobSocket.close();
 
   // --- Encrypted key backup + reinstall recovery ---
   const recoveryPass = 'correct horse battery staple';

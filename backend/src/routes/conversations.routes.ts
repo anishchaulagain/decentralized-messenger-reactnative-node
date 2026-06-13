@@ -2,6 +2,7 @@ import { Router } from 'express';
 
 import { ApiError, asyncHandler } from '../lib/http-error';
 import { prisma } from '../lib/prisma';
+import { emitToUsers } from '../lib/realtime';
 import { publicUserSelect, toPublicUser } from '../lib/serializers';
 import { authenticate, requireApproved } from '../middleware/auth';
 import { validateBody } from '../middleware/validate';
@@ -85,7 +86,7 @@ router.get(
   asyncHandler(async (req, res) => {
     const me = req.user!.id;
     const { id } = req.params as { id: string };
-    await loadParticipantConversation(id, me);
+    const conversation = await loadParticipantConversation(id, me);
 
     const messages = await prisma.message.findMany({
       where: { conversationId: id },
@@ -93,10 +94,17 @@ router.get(
       select: messageSelect,
     });
 
-    await prisma.message.updateMany({
+    const read = await prisma.message.updateMany({
       where: { conversationId: id, senderId: { not: me }, readAt: null },
       data: { readAt: new Date() },
     });
+
+    // Tell the other participant their messages were read (live read receipts).
+    if (read.count > 0) {
+      const otherId =
+        conversation.userAId === me ? conversation.userBId : conversation.userAId;
+      emitToUsers([otherId], 'messages:read', { conversationId: id, readerId: me });
+    }
 
     res.json({ messages });
   }),
@@ -142,6 +150,9 @@ router.post(
       }),
       prisma.conversation.update({ where: { id }, data: { updatedAt: new Date() } }),
     ]);
+
+    // Push the new (encrypted) message to both participants in real time.
+    emitToUsers([me, otherId], 'message:new', { conversationId: id, message });
 
     res.status(201).json({ message });
   }),
