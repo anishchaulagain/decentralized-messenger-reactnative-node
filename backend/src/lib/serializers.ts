@@ -9,8 +9,26 @@ export interface PublicUser {
   name: string;
   email: string;
   status: User['status'];
+  publicKey: string | null;
 }
 
-export function toPublicUser(user: Pick<User, 'id' | 'name' | 'email' | 'status'>): PublicUser {
-  return { id: user.id, name: user.name, email: user.email, status: user.status };
+export function toPublicUser(
+  user: Pick<User, 'id' | 'name' | 'email' | 'status' | 'publicKey'>,
+): PublicUser {
+  return {
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    status: user.status,
+    publicKey: user.publicKey,
+  };
 }
+
+/** Public-user fields to select on related-user queries. */
+export const publicUserSelect = {
+  id: true,
+  name: true,
+  email: true,
+  status: true,
+  publicKey: true,
+} as const;

@@ -68,7 +68,8 @@ on logout. Reusing a rotated token revokes the whole chain (theft protection).
 
 | Method | Path | Body | Notes |
 |---|---|---|---|
-| `GET` | `/api/users/search?email=` | — | Find an approved user by email + relationship state |
+| `PUT` | `/api/users/me/keys` | `{ publicKey }` | Register/replace your E2EE public key (base64 X25519) |
+| `GET` | `/api/users/search?email=` | — | Find an approved user by email (incl. their public key) + relationship state |
 | `POST` | `/api/requests` | `{ recipientId }` | Send a message request |
 | `GET` | `/api/requests/incoming` | — | Pending requests sent to me |
 | `GET` | `/api/requests/outgoing` | — | Requests I sent |
@@ -79,9 +80,38 @@ on logout. Reusing a rotated token revokes the whole chain (theft protection).
 
 | Method | Path | Body | Notes |
 |---|---|---|---|
-| `GET` | `/api/conversations` | — | My conversations + last message + unread count |
-| `GET` | `/api/conversations/:id/messages` | — | Messages (marks incoming as read) |
-| `POST` | `/api/conversations/:id/messages` | `{ body }` | Send a message |
+| `GET` | `/api/conversations` | — | My conversations + last (encrypted) message + unread count |
+| `GET` | `/api/conversations/:id/messages` | — | Encrypted messages (marks incoming as read) |
+| `POST` | `/api/conversations/:id/messages` | `{ ciphertext, nonce }` | Send an encrypted message (client encrypts first) |
+
+## End-to-end encryption
+
+Messages are end-to-end encrypted — **the server only ever stores ciphertext and
+public keys, never plaintext and never a private key.** Anyone in the middle (the
+API, the database, the network) sees only opaque ciphertext.
+
+**Scheme:** NaCl `box` — X25519 key agreement + XSalsa20-Poly1305 authenticated
+encryption (`tweetnacl`).
+
+1. Each device generates an X25519 keypair. The **private key never leaves the
+   device** (mobile stores it in the OS secure keystore via `expo-secure-store`).
+2. The **public key** is uploaded with `PUT /api/users/me/keys` and returned in
+   search results / conversation contacts.
+3. To send, the client encrypts with the **recipient's public key** + its own
+   private key and posts `{ ciphertext, nonce }`. The server snapshots both
+   parties' public keys on the row (so decryption survives a later key rotation).
+4. To read, the client decrypts with its **own private key** + the counterparty's
+   public key (`senderPublicKey` for incoming, `recipientPublicKey` for outgoing).
+
+The shared secret is symmetric, so both participants — and only they — can decrypt.
+Client crypto lives in `mobile/src/lib/crypto.ts`; the backend smoke test
+(`npm run smoke`) exercises the full encrypt → store → decrypt round-trip and
+asserts the database never holds plaintext.
+
+**Not yet implemented:** forward secrecy. A single long-term keypair per user means
+a leaked private key exposes past messages. A Double-Ratchet layer (Signal-style)
+is the natural upgrade. Key rotation also currently orphans messages encrypted to
+the old key.
 
 ## Data model
 

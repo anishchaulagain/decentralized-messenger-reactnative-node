@@ -32,6 +32,26 @@ export const createRequestSchema = z.object({
   recipientId: z.uuid('A valid recipientId is required'),
 });
 
+// --- End-to-end encryption ---
+
+const base64 = z.string().regex(/^[A-Za-z0-9+/]+={0,2}$/, 'Must be base64');
+
+/** A base64 value that decodes to exactly `bytes` bytes. */
+function base64OfBytes(bytes: number, label: string) {
+  return base64.refine((s) => Buffer.from(s, 'base64').length === bytes, {
+    message: `${label} must be ${bytes} bytes`,
+  });
+}
+
+// X25519 public key = 32 bytes.
+export const publicKeySchema = base64OfBytes(32, 'publicKey');
+
+export const updatePublicKeySchema = z.object({
+  publicKey: publicKeySchema,
+});
+
+// Encrypted message: base64 ciphertext + 24-byte NaCl box nonce.
 export const sendMessageSchema = z.object({
-  body: z.string().trim().min(1, 'Message cannot be empty').max(4000),
+  ciphertext: base64.max(8000, 'Ciphertext too large'),
+  nonce: base64OfBytes(24, 'nonce'),
 });

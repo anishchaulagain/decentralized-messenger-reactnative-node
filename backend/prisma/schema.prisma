@@ -36,6 +36,10 @@ model User {
   role         Role          @default(USER)
   status       AccountStatus @default(PENDING)
 
+  // Base64 X25519 public key for end-to-end encryption. The matching private
+  // key never leaves the user's device, so the server cannot read messages.
+  publicKey String?
+
   // Admin moderation trail
   reviewedAt   DateTime?
   reviewedBy   User?         @relation("Reviewer", fields: [reviewedById], references: [id])
@@ -108,14 +112,25 @@ model Conversation {
   @@index([userBId])
 }
 
+// Messages are end-to-end encrypted. The server stores only the ciphertext and
+// the public keys used, never plaintext and never any private key.
 model Message {
   id             String       @id @default(uuid())
   conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   conversationId String
   sender         User         @relation("Sender", fields: [senderId], references: [id], onDelete: Cascade)
   senderId       String
-  body           String
-  readAt         DateTime?
+
+  // NaCl box: base64 ciphertext + 24-byte nonce. Decryptable only by the two
+  // participants using their private keys.
+  ciphertext         String
+  nonce              String
+  // Snapshots of both parties' public keys at send time, so decryption still
+  // works if either party later rotates their key.
+  senderPublicKey    String
+  recipientPublicKey String
+
+  readAt DateTime?
 
   createdAt DateTime @default(now())
 

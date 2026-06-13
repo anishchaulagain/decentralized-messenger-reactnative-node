@@ -7,8 +7,37 @@
  */
 import 'dotenv/config';
 import { PrismaClient } from '@prisma/client';
+import nacl from 'tweetnacl';
+import {
+  decodeBase64,
+  decodeUTF8,
+  encodeBase64,
+  encodeUTF8,
+} from 'tweetnacl-util';
 
 const prisma = new PrismaClient();
+
+// Client-side crypto, mirroring what the mobile app does (tweetnacl box).
+function encrypt(plaintext: string, theirPublicKeyB64: string, mySecretKey: Uint8Array) {
+  const nonce = nacl.randomBytes(nacl.box.nonceLength);
+  const box = nacl.box(decodeUTF8(plaintext), nonce, decodeBase64(theirPublicKeyB64), mySecretKey);
+  return { ciphertext: encodeBase64(box), nonce: encodeBase64(nonce) };
+}
+
+function decrypt(
+  ciphertextB64: string,
+  nonceB64: string,
+  theirPublicKeyB64: string,
+  mySecretKey: Uint8Array,
+): string | null {
+  const opened = nacl.box.open(
+    decodeBase64(ciphertextB64),
+    decodeBase64(nonceB64),
+    decodeBase64(theirPublicKeyB64),
+    mySecretKey,
+  );
+  return opened ? encodeUTF8(opened) : null;
+}
 const BASE = process.env.SMOKE_BASE_URL ?? `http://localhost:${process.env.PORT ?? 3000}`;
 const stamp = Date.now();
 
@@ -107,14 +136,24 @@ async function main() {
   check('Bob logs in', bobLogin.status === 200 && !!bobLogin.data.accessToken);
   const bobToken = bobLogin.data.accessToken as string;
 
+  // Each client generates an X25519 keypair; only the public half is uploaded.
+  const aliceKeys = nacl.box.keyPair();
+  const bobKeys = nacl.box.keyPair();
+  const aliceKeyUp = await api('PUT', '/api/users/me/keys', { publicKey: encodeBase64(aliceKeys.publicKey) }, aliceToken);
+  check('Alice uploads public key', aliceKeyUp.status === 200 && !!aliceKeyUp.data.user.publicKey);
+  const bobKeyUp = await api('PUT', '/api/users/me/keys', { publicKey: encodeBase64(bobKeys.publicKey) }, bobToken);
+  check('Bob uploads public key', bobKeyUp.status === 200 && !!bobKeyUp.data.user.publicKey);
+
   // Alice cannot reach admin routes
   const forbidden = await api('GET', '/api/admin/users', undefined, aliceToken);
   check('approved user blocked from admin routes -> 403', forbidden.status === 403);
 
-  // Alice searches for Bob
+  // Alice searches for Bob — and gets his public key for encryption
   const search = await api('GET', `/api/users/search?email=${encodeURIComponent(bobEmail)}`, undefined, aliceToken);
   check('search finds Bob', search.status === 200 && search.data.user.id === bobId);
+  check('search returns Bob public key', search.data.user.publicKey === encodeBase64(bobKeys.publicKey));
   check('relationship is none', search.data.relationship.status === 'none', search.data.relationship);
+  const bobPublicKey = search.data.user.publicKey as string;
 
   // Search for a nonexistent email
   const missing = await api('GET', `/api/users/search?email=nobody${stamp}@example.com`, undefined, aliceToken);
@@ -146,21 +185,57 @@ async function main() {
   const aliceConvos = await api('GET', '/api/conversations', undefined, aliceToken);
   check('Alice sees conversation with Bob', aliceConvos.data.conversations.some((c: any) => c.id === conversationId && c.contact.id === bobId));
 
-  // Alice sends a message
-  const msg1 = await api('POST', `/api/conversations/${conversationId}/messages`, { body: 'Hey Bob!' }, aliceToken);
-  check('Alice sends a message -> 201', msg1.status === 201 && msg1.data.message.body === 'Hey Bob!');
+  // Alice encrypts a message to Bob's public key and sends only ciphertext.
+  const plaintext1 = 'Hey Bob! This is end-to-end encrypted.';
+  const enc1 = encrypt(plaintext1, bobPublicKey, aliceKeys.secretKey);
+  const msg1 = await api('POST', `/api/conversations/${conversationId}/messages`, enc1, aliceToken);
+  check('Alice sends an encrypted message -> 201', msg1.status === 201, msg1.data);
+  check('server never receives plaintext (no body field)', msg1.data.message.body === undefined);
+  check('stored ciphertext is not the plaintext', msg1.data.message.ciphertext !== plaintext1);
 
-  // Bob sees unread, then reads
+  // The server stores ONLY ciphertext — verify directly in the database.
+  const rowInDb = await prisma.message.findUnique({ where: { id: msg1.data.message.id } });
+  check('DB row has no plaintext column', !('body' in (rowInDb as object)));
+  check('DB ciphertext != plaintext', rowInDb?.ciphertext !== plaintext1);
+  check(
+    'a middle reader cannot decrypt without a private key',
+    decrypt(rowInDb!.ciphertext, rowInDb!.nonce, rowInDb!.senderPublicKey, nacl.box.keyPair().secretKey) === null,
+  );
+
+  // Bob sees unread, then decrypts with his private key + Alice's public key.
   const bobConvos = await api('GET', '/api/conversations', undefined, bobToken);
   const bobConvo = bobConvos.data.conversations.find((c: any) => c.id === conversationId);
   check('Bob has 1 unread', bobConvo?.unreadCount === 1, bobConvo);
   const bobMsgs = await api('GET', `/api/conversations/${conversationId}/messages`, undefined, bobToken);
-  check('Bob reads the message', bobMsgs.data.messages.length === 1 && bobMsgs.data.messages[0].body === 'Hey Bob!');
+  const incomingForBob = bobMsgs.data.messages[0];
+  const bobDecrypted = decrypt(
+    incomingForBob.ciphertext,
+    incomingForBob.nonce,
+    incomingForBob.senderPublicKey,
+    bobKeys.secretKey,
+  );
+  check('Bob decrypts Alice\'s message', bobDecrypted === plaintext1, bobDecrypted);
 
-  // Bob replies; Alice reads
-  await api('POST', `/api/conversations/${conversationId}/messages`, { body: 'Hi Alice!' }, bobToken);
+  // Bob replies (encrypted to Alice); Alice decrypts.
+  const plaintext2 = 'Hi Alice! Encrypted reply.';
+  const aliceFromBobView = bobConvo.contact.publicKey as string; // Alice's public key
+  const enc2 = encrypt(plaintext2, aliceFromBobView, bobKeys.secretKey);
+  await api('POST', `/api/conversations/${conversationId}/messages`, enc2, bobToken);
+
   const aliceMsgs = await api('GET', `/api/conversations/${conversationId}/messages`, undefined, aliceToken);
   check('conversation has 2 messages', aliceMsgs.data.messages.length === 2);
+  const incomingForAlice = aliceMsgs.data.messages[1];
+  const aliceDecrypted = decrypt(
+    incomingForAlice.ciphertext,
+    incomingForAlice.nonce,
+    incomingForAlice.senderPublicKey,
+    aliceKeys.secretKey,
+  );
+  check('Alice decrypts Bob\'s reply', aliceDecrypted === plaintext2, aliceDecrypted);
+
+  // Invalid nonce length is rejected by validation.
+  const badNonce = await api('POST', `/api/conversations/${conversationId}/messages`, { ciphertext: enc1.ciphertext, nonce: 'AAAA' }, aliceToken);
+  check('invalid nonce -> 422', badNonce.status === 422);
 
   // Non-participant cannot read the conversation
   const adminPeek = await api('GET', `/api/conversations/${conversationId}/messages`, undefined, adminToken);

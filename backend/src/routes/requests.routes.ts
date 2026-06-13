@@ -3,7 +3,7 @@ import { Router } from 'express';
 import { orderedPair } from '../lib/contacts';
 import { ApiError, asyncHandler } from '../lib/http-error';
 import { prisma } from '../lib/prisma';
-import { toPublicUser } from '../lib/serializers';
+import { publicUserSelect, toPublicUser } from '../lib/serializers';
 import { authenticate, requireApproved } from '../middleware/auth';
 import { validateBody } from '../middleware/validate';
 import { createRequestSchema } from '../schemas';
@@ -71,7 +71,7 @@ router.get(
       where: { recipientId: req.user!.id, status: 'PENDING' },
       orderBy: { createdAt: 'desc' },
       include: {
-        requester: { select: { id: true, name: true, email: true, status: true } },
+        requester: { select: publicUserSelect },
       },
     });
     res.json({ requests });
@@ -86,7 +86,7 @@ router.get(
       where: { requesterId: req.user!.id },
       orderBy: { createdAt: 'desc' },
       include: {
-        recipient: { select: { id: true, name: true, email: true, status: true } },
+        recipient: { select: publicUserSelect },
       },
     });
     res.json({ requests });
