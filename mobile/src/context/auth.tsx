@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 
-import { authApi } from '@/lib/api';
+import { authApi, ensureFreshSession } from '@/lib/api';
 import {
   clearSession,
   getSession,
@@ -32,6 +32,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     loadSession().then((s) => {
       setSessionState(s);
       setReady(true);
+      // Returning user with a saved session: refresh the token in the background
+      // if it expired while the app was closed, so we go straight to the chats
+      // (never the login screen) with a valid token. A dead refresh token clears
+      // the session here, which correctly routes to login.
+      if (s) void ensureFreshSession();
     });
     return subscribe(setSessionState);
   }, []);

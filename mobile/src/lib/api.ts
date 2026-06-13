@@ -61,6 +61,40 @@ async function doRefresh(): Promise<boolean> {
   }
 }
 
+/** Reads a JWT's `exp` without verifying it (we just need the expiry locally). */
+function isAccessTokenExpired(token: string): boolean {
+  try {
+    const part = token.split('.')[1];
+    const b64 = part.replace(/-/g, '+').replace(/_/g, '/');
+    const json = JSON.parse(
+      decodeURIComponent(
+        atob(b64)
+          .split('')
+          .map((c) => '%' + c.charCodeAt(0).toString(16).padStart(2, '0'))
+          .join(''),
+      ),
+    ) as { exp?: number };
+    if (typeof json.exp !== 'number') return true;
+    return Date.now() >= json.exp * 1000 - 10_000; // refresh ~10s early
+  } catch {
+    return true; // unreadable token → treat as expired so we refresh
+  }
+}
+
+/**
+ * Ensures the stored session has a usable access token, refreshing it if it has
+ * expired. Call on app startup so a returning user lands straight in the app
+ * with a valid token (clean socket connect, no first-request 401). A network
+ * error leaves the session intact; only a server-rejected refresh clears it.
+ */
+export async function ensureFreshSession(): Promise<void> {
+  const session = getSession();
+  if (!session) return;
+  if (isAccessTokenExpired(session.accessToken)) {
+    await refreshTokens();
+  }
+}
+
 export async function apiRequest<T>(
   method: string,
   path: string,
