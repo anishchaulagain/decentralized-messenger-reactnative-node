@@ -1,7 +1,7 @@
 import { MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import {
   KeyboardAvoidingView,
   Pressable,
@@ -28,17 +28,19 @@ export default function LoginScreen() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const canSubmit = useMemo(
-    () => EMAIL_RE.test(email.trim()) && password.length >= 1 && !submitting,
-    [email, password, submitting],
-  );
+  const canSubmit = email.trim().length > 0 && password.length > 0 && !submitting;
 
   const signIn = async () => {
-    if (!canSubmit) return;
+    if (submitting) return;
+    const trimmedEmail = email.trim();
+    if (!EMAIL_RE.test(trimmedEmail)) {
+      setError('Please enter a valid email address.');
+      return;
+    }
     setSubmitting(true);
     setError(null);
     try {
-      await authSignIn(email.trim(), password);
+      await authSignIn(trimmedEmail, password);
       // Make sure this device has an E2EE keypair (or restore one from backup).
       const keyState = await ensureKeysReady();
       router.replace(keyState === 'needs-restore' ? '/restore-key' : '/(tabs)/chats');

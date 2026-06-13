@@ -1,7 +1,7 @@
 import { MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import {
   KeyboardAvoidingView,
   Pressable,
@@ -32,21 +32,35 @@ export default function SignupScreen() {
   const passwordsMatch = confirm.length > 0 && password === confirm;
   const confirmMismatch = confirm.length > 0 && password !== confirm;
 
-  const canSubmit = useMemo(
-    () =>
-      name.trim().length > 0 &&
-      EMAIL_RE.test(email.trim()) &&
-      password.length >= MIN_PASSWORD &&
-      passwordsMatch,
-    [name, email, password, passwordsMatch],
-  );
+  // Enable once every field has content; specific validation happens on submit
+  // so the user always knows what's missing instead of a silently-disabled button.
+  const canSubmit =
+    name.trim().length > 0 &&
+    email.trim().length > 0 &&
+    password.length > 0 &&
+    confirm.length > 0 &&
+    !submitting;
 
   const signUp = async () => {
-    if (!canSubmit || submitting) return;
+    if (submitting) return;
+    const trimmedEmail = email.trim();
+    if (!EMAIL_RE.test(trimmedEmail)) {
+      setError('Please enter a valid email address.');
+      return;
+    }
+    if (password.length < MIN_PASSWORD) {
+      setError(`Password must be at least ${MIN_PASSWORD} characters.`);
+      return;
+    }
+    if (password !== confirm) {
+      setError("Passwords don't match.");
+      return;
+    }
+
     setSubmitting(true);
     setError(null);
     try {
-      await authApi.register({ name: name.trim(), email: email.trim(), password });
+      await authApi.register({ name: name.trim(), email: trimmedEmail, password });
       // New accounts start PENDING — an admin must approve before first login.
       setDone(true);
     } catch (e) {
