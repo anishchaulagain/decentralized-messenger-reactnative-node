@@ -24,7 +24,23 @@ interface RequestOptions {
   retry?: boolean; // allow one refresh+retry on 401 (default true)
 }
 
-async function refreshTokens(): Promise<boolean> {
+// Single-flight guard: if several requests 401 at once, they must share one
+// refresh. Refresh tokens are one-time (rotated on use) and the server treats a
+// reused token as theft — revoking the whole chain. Without this, concurrent
+// refreshes would each present the same old token and trip that detection,
+// logging the user out spuriously.
+let refreshInFlight: Promise<boolean> | null = null;
+
+function refreshTokens(): Promise<boolean> {
+  if (!refreshInFlight) {
+    refreshInFlight = doRefresh().finally(() => {
+      refreshInFlight = null;
+    });
+  }
+  return refreshInFlight;
+}
+
+async function doRefresh(): Promise<boolean> {
   const session = getSession();
   if (!session) return false;
   try {
