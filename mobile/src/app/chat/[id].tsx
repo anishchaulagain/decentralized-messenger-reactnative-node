@@ -42,6 +42,7 @@ interface DisplayMessage {
   deleted: boolean;
   reactions: DisplayReaction[];
   reply: { text: string; outgoing: boolean } | null;
+  pending?: boolean; // shown optimistically, not yet confirmed by the server
 }
 
 function formatTime(iso: string): string {
@@ -144,9 +145,12 @@ function Bubble({
         {message.edited && !message.deleted && (
           <Text className="font-inter text-[11px] text-outline opacity-60">edited</Text>
         )}
-        {message.outgoing && message.read && (
-          <MaterialIcons name="done-all" size={14} color={Palette.primary} />
-        )}
+        {message.outgoing &&
+          (message.pending ? (
+            <MaterialIcons name="schedule" size={12} color={Palette.outline} />
+          ) : message.read ? (
+            <MaterialIcons name="done-all" size={14} color={Palette.primary} />
+          ) : null)}
       </View>
     </View>
   );
@@ -311,29 +315,72 @@ export default function ChatScreen() {
 
   const send = async () => {
     const text = draft.trim();
-    if (!text || sending || !id) return;
+    if (!text || !id) return;
     if (!contact?.publicKey) {
       setError('This contact has not set up encryption yet.');
       return;
     }
-    setSending(true);
+
+    // Editing: update the existing message, then reconcile.
+    if (editing) {
+      const target = editing;
+      setSending(true);
+      try {
+        const { ciphertext, nonce } = await encryptMessage(text, contact.publicKey);
+        await conversationsApi.edit(id, target.id, ciphertext, nonce);
+        setEditing(null);
+        setDraft('');
+        await loadMessages();
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'Failed to edit');
+      } finally {
+        setSending(false);
+      }
+      return;
+    }
+
+    // New message: render it immediately (optimistic) and send in the
+    // background, so the UI never blocks on the server round-trip. The send
+    // response (and the websocket echo) reconcile it with the stored copy.
+    const replyTo = replyingTo;
+    const tempId = `temp-${Date.now()}`;
+    const optimistic: DisplayMessage = {
+      id: tempId,
+      text,
+      time: formatTime(new Date().toISOString()),
+      outgoing: true,
+      read: false,
+      edited: false,
+      deleted: false,
+      reactions: [],
+      reply: replyTo ? { text: replyTo.text, outgoing: replyTo.outgoing } : null,
+      pending: true,
+    };
+    setMessages((prev) => [...prev, optimistic]);
+    setDraft('');
+    setReplyingTo(null);
+    setError(null);
+    stopTyping();
+    requestAnimationFrame(() => listRef.current?.scrollToEnd({ animated: true }));
+
     try {
       const { ciphertext, nonce } = await encryptMessage(text, contact.publicKey);
-      if (editing) {
-        await conversationsApi.edit(id, editing.id, ciphertext, nonce);
-        setEditing(null);
-      } else {
-        await conversationsApi.send(id, ciphertext, nonce, replyingTo?.id);
-        setReplyingTo(null);
-      }
-      setDraft('');
-      stopTyping();
-      await loadMessages();
-      requestAnimationFrame(() => listRef.current?.scrollToEnd({ animated: true }));
+      const res = await conversationsApi.send(id, ciphertext, nonce, replyTo?.id);
+      // Swap the temp id for the real one and clear the pending state. (A
+      // websocket-triggered reload may also reconcile; both paths are idempotent.)
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === tempId
+            ? { ...m, id: res.message.id, pending: false, time: formatTime(res.message.createdAt) }
+            : m,
+        ),
+      );
     } catch (e) {
+      // Roll back the optimistic bubble and restore the draft so the user can retry.
+      setMessages((prev) => prev.filter((m) => m.id !== tempId));
+      setDraft(text);
+      setReplyingTo(replyTo);
       setError(e instanceof Error ? e.message : 'Failed to send');
-    } finally {
-      setSending(false);
     }
   };
 
