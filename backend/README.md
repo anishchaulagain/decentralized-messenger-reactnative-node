@@ -199,7 +199,19 @@ Hardening still recommended before production:
   periodically; scope the DB user to least privilege.
 - **Refresh-token cleanup** — prune expired/revoked rows on a schedule.
 
+## Real-time (Socket.IO)
+
+Messages are delivered live over Socket.IO (no polling). Clients connect with their
+JWT access token (`auth: { token }`), which is verified at handshake; each client
+joins a room named by its user id. On send, the server pushes:
+
+- `message:new` → `{ conversationId, message }` (the encrypted message) to both participants.
+- `messages:read` → `{ conversationId, readerId }` to the sender when the recipient reads.
+
+The socket lives alongside Express on the same port (`src/lib/realtime.ts`). The smoke
+test verifies live delivery end-to-end (and that an invalid token is rejected).
+
 ## Notes / next steps
 
-- Real-time delivery is not implemented yet — messaging is REST polling. A Socket.IO
-  layer over the same conversation/message model is the natural next step.
+- Background delivery (when the app is closed) still needs push notifications
+  (Expo + APNs/FCM) — Socket.IO only delivers while the app is connected.

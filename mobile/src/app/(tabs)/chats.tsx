@@ -1,7 +1,7 @@
 import { MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, RefreshControl, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -9,6 +9,7 @@ import { Avatar } from '@/components/avatar';
 import { useAuth } from '@/context/auth';
 import { conversationsApi, requestsApi, type ConversationSummary } from '@/lib/api';
 import { decryptForMe } from '@/lib/messages';
+import { onSocket } from '@/lib/socket';
 import { Palette } from '@/constants/palette';
 
 function ChatRow({
@@ -94,6 +95,16 @@ export default function ChatsScreen() {
       load();
     }, [load]),
   );
+
+  // Live updates: refresh the list when a message arrives or on (re)connect.
+  useEffect(() => {
+    const unsubNew = onSocket('message:new', () => load());
+    const unsubConnect = onSocket('connect', () => load());
+    return () => {
+      unsubNew();
+      unsubConnect();
+    };
+  }, [load]);
 
   const onRefresh = () => {
     setRefreshing(true);

@@ -9,6 +9,7 @@ import {
   subscribe,
   type Session,
 } from '@/lib/session';
+import { connectSocket, disconnectSocket } from '@/lib/socket';
 
 interface AuthContextValue {
   session: Session | null;
@@ -30,6 +31,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
     return subscribe(setSessionState);
   }, []);
+
+  // Keep the realtime socket connected whenever there's a session.
+  useEffect(() => {
+    if (session) connectSocket();
+    else disconnectSocket();
+  }, [session]);
 
   const value = useMemo<AuthContextValue>(
     () => ({
