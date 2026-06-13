@@ -4,9 +4,14 @@ import { ApiError, asyncHandler } from '../lib/http-error';
 import { signAccessToken } from '../lib/jwt';
 import { hashPassword, verifyPassword } from '../lib/password';
 import { prisma } from '../lib/prisma';
+import {
+  issueTokenPair,
+  revokeRefreshToken,
+  rotateRefreshToken,
+} from '../lib/refresh-token';
 import { authenticate } from '../middleware/auth';
 import { validateBody } from '../middleware/validate';
-import { loginSchema, registerSchema } from '../schemas';
+import { loginSchema, refreshSchema, registerSchema } from '../schemas';
 
 const router = Router();
 
@@ -63,9 +68,45 @@ router.post(
       throw new ApiError(403, 'Your account request was rejected');
     }
 
-    const token = signAccessToken(user.id);
+    const tokens = await issueTokenPair(user.id);
     const { passwordHash: _passwordHash, ...safeUser } = user;
-    res.json({ token, user: safeUser });
+    res.json({ ...tokens, user: safeUser });
+  }),
+);
+
+// Exchange a valid refresh token for a new access + refresh token pair.
+// The old refresh token is rotated out (one-time use).
+router.post(
+  '/refresh',
+  validateBody(refreshSchema),
+  asyncHandler(async (req, res) => {
+    const { refreshToken } = req.body as { refreshToken: string };
+    const { userId, refreshToken: newRefreshToken } = await rotateRefreshToken(refreshToken);
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      omit: { passwordHash: true },
+    });
+    if (!user) {
+      await revokeRefreshToken(newRefreshToken);
+      throw new ApiError(401, 'Account no longer exists');
+    }
+    if (user.status !== 'APPROVED') {
+      await revokeRefreshToken(newRefreshToken);
+      throw new ApiError(403, 'Your account is not approved');
+    }
+
+    res.json({ accessToken: signAccessToken(userId), refreshToken: newRefreshToken, user });
+  }),
+);
+
+// Revoke a refresh token (sign out). Access tokens expire on their own.
+router.post(
+  '/logout',
+  validateBody(refreshSchema),
+  asyncHandler(async (req, res) => {
+    await revokeRefreshToken((req.body as { refreshToken: string }).refreshToken);
+    res.status(204).send();
   }),
 );
 

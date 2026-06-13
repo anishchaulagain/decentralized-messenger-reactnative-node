@@ -30,13 +30,18 @@ Other scripts: `npm run build` (compile to `dist/`), `npm start` (run build), `n
 |---|---|
 | `DATABASE_URL` | Postgres connection string (points at the `dipanix` database) |
 | `JWT_SECRET` | Secret used to sign access tokens |
-| `JWT_EXPIRES_IN` | Token lifetime (default `7d`) |
+| `ACCESS_TOKEN_TTL` | Access-token lifetime (default `15m`) |
+| `REFRESH_TOKEN_TTL_DAYS` | Refresh-token lifetime in days (default `30`) |
 | `ADMIN_USER_EMAIL` / `ADMIN_PASSWORD` / `ADMIN_NAME` | Seed admin credentials |
 | `PORT` | Server port (default `3000`) |
 
 ## Auth
 
-Send the token on protected routes: `Authorization: Bearer <token>`.
+Login returns a short-lived **access token** and a long-lived **refresh token**.
+Send the access token on protected routes: `Authorization: Bearer <accessToken>`.
+When it expires, call `POST /api/auth/refresh` with the refresh token to get a new
+pair — refresh tokens are rotated on every use (one-time), stored hashed, and revoked
+on logout. Reusing a rotated token revokes the whole chain (theft protection).
 
 ## Endpoints
 
@@ -46,7 +51,9 @@ Send the token on protected routes: `Authorization: Bearer <token>`.
 |---|---|---|---|
 | `GET` | `/health` | — | Liveness check |
 | `POST` | `/api/auth/register` | `{ name, email, password }` | Creates a `PENDING` user |
-| `POST` | `/api/auth/login` | `{ email, password }` | Returns `{ token, user }`; 403 if pending/rejected |
+| `POST` | `/api/auth/login` | `{ email, password }` | Returns `{ accessToken, refreshToken, user }`; 403 if pending/rejected |
+| `POST` | `/api/auth/refresh` | `{ refreshToken }` | Rotates and returns a new `{ accessToken, refreshToken, user }` |
+| `POST` | `/api/auth/logout` | `{ refreshToken }` | Revokes the refresh token (204) |
 | `GET` | `/api/auth/me` | — (auth) | Current user |
 
 ### Admin (role `ADMIN`)
@@ -79,11 +86,12 @@ Send the token on protected routes: `Authorization: Bearer <token>`.
 ## Data model
 
 `User` (role `USER`/`ADMIN`, status `PENDING`/`APPROVED`/`REJECTED`), `MessageRequest`
-(`PENDING`/`ACCEPTED`/`REJECTED`), `Conversation` (one per user pair), `Message`. See
-`prisma/schema.prisma`.
+(`PENDING`/`ACCEPTED`/`REJECTED`), `Conversation` (one per user pair), `Message`,
+`RefreshToken` (hashed, rotating). See `prisma/schema.prisma`.
 
 ## Notes / next steps
 
 - Real-time delivery is not implemented yet — messaging is REST polling. A Socket.IO
   layer over the same conversation/message model is the natural next step.
-- Auth is stateless JWT; there is no refresh-token rotation or logout/blacklist yet.
+- Expired refresh-token rows are left in the table; a periodic cleanup job
+  (`DELETE … WHERE expiresAt < now() OR revokedAt IS NOT NULL`) can prune them.

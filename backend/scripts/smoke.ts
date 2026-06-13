@@ -58,9 +58,9 @@ async function main() {
     email: adminEmail,
     password: adminPassword,
   });
-  check('admin can log in', adminLogin.status === 200 && !!adminLogin.data.token, adminLogin.data);
+  check('admin can log in', adminLogin.status === 200 && !!adminLogin.data.accessToken, adminLogin.data);
   check('admin has ADMIN role', adminLogin.data.user.role === 'ADMIN');
-  const adminToken = adminLogin.data.token as string;
+  const adminToken = adminLogin.data.accessToken as string;
 
   // Register two users -> pending
   const regA = await api('POST', '/api/auth/register', {
@@ -100,11 +100,12 @@ async function main() {
 
   // Users can now log in
   const aliceLogin = await api('POST', '/api/auth/login', { email: aliceEmail, password: pw });
-  check('Alice logs in', aliceLogin.status === 200 && !!aliceLogin.data.token);
-  const aliceToken = aliceLogin.data.token as string;
+  check('Alice logs in', aliceLogin.status === 200 && !!aliceLogin.data.accessToken);
+  check('login returns a refresh token', !!aliceLogin.data.refreshToken);
+  const aliceToken = aliceLogin.data.accessToken as string;
   const bobLogin = await api('POST', '/api/auth/login', { email: bobEmail, password: pw });
-  check('Bob logs in', bobLogin.status === 200 && !!bobLogin.data.token);
-  const bobToken = bobLogin.data.token as string;
+  check('Bob logs in', bobLogin.status === 200 && !!bobLogin.data.accessToken);
+  const bobToken = bobLogin.data.accessToken as string;
 
   // Alice cannot reach admin routes
   const forbidden = await api('GET', '/api/admin/users', undefined, aliceToken);
@@ -164,6 +165,27 @@ async function main() {
   // Non-participant cannot read the conversation
   const adminPeek = await api('GET', `/api/conversations/${conversationId}/messages`, undefined, adminToken);
   check('non-participant blocked from messages -> 403/404', adminPeek.status === 403 || adminPeek.status === 404);
+
+  // --- Access / refresh token lifecycle ---
+  const freshLogin = await api('POST', '/api/auth/login', { email: aliceEmail, password: pw });
+  const r0 = freshLogin.data.refreshToken as string;
+
+  const refreshed = await api('POST', '/api/auth/refresh', { refreshToken: r0 });
+  check('refresh returns a new token pair', refreshed.status === 200 && !!refreshed.data.accessToken && !!refreshed.data.refreshToken, refreshed.data);
+  const r1 = refreshed.data.refreshToken as string;
+  const a1 = refreshed.data.accessToken as string;
+
+  const meWithNew = await api('GET', '/api/auth/me', undefined, a1);
+  check('new access token works on /me', meWithNew.status === 200 && meWithNew.data.user.email === aliceEmail);
+
+  const reuseOld = await api('POST', '/api/auth/refresh', { refreshToken: r0 });
+  check('reusing a rotated refresh token -> 401', reuseOld.status === 401, reuseOld.data);
+
+  const logout = await api('POST', '/api/auth/logout', { refreshToken: r1 });
+  check('logout -> 204', logout.status === 204);
+
+  const afterLogout = await api('POST', '/api/auth/refresh', { refreshToken: r1 });
+  check('refresh after logout -> 401', afterLogout.status === 401);
 
   console.log(`\n✅ All ${passed} checks passed.\n`);
 }

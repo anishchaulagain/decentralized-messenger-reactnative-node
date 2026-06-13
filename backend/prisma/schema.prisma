@@ -48,11 +48,28 @@ model User {
   conversationsA Conversation[] @relation("UserA")
   conversationsB Conversation[] @relation("UserB")
   messages       Message[]      @relation("Sender")
+  refreshTokens  RefreshToken[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([status])
+}
+
+// Long-lived refresh tokens, stored as a SHA-256 hash (never the raw value).
+// Rotated on every use; reuse of a revoked token revokes the whole chain.
+model RefreshToken {
+  id           String    @id @default(uuid())
+  tokenHash    String    @unique
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId       String
+  expiresAt    DateTime
+  revokedAt    DateTime?
+  replacedById String?
+
+  createdAt DateTime @default(now())
+
+  @@index([userId])
 }
 
 // A request from one user to another to start chatting.
