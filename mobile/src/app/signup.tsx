@@ -15,22 +15,32 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Palette } from '@/constants/palette';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const MIN_PASSWORD = 6;
 
-export default function LoginScreen() {
+export default function SignupScreen() {
   const router = useRouter();
+  const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirm, setConfirm] = useState('');
   const [showPassword, setShowPassword] = useState(false);
 
+  const passwordsMatch = confirm.length > 0 && password === confirm;
+  const confirmMismatch = confirm.length > 0 && password !== confirm;
+
   const canSubmit = useMemo(
-    () => EMAIL_RE.test(email.trim()) && password.length >= 1,
-    [email, password],
+    () =>
+      name.trim().length > 0 &&
+      EMAIL_RE.test(email.trim()) &&
+      password.length >= MIN_PASSWORD &&
+      passwordsMatch,
+    [name, email, password, passwordsMatch],
   );
 
-  const signIn = () => {
+  const signUp = () => {
     if (!canSubmit) return;
-    // TODO: POST { email, password } to the auth API, store the returned JWT,
-    // then route into the app.
+    // TODO: POST { name, email, password } to the auth API, store the returned
+    // JWT, then route into the app.
     router.replace('/(tabs)/chats');
   };
 
@@ -53,7 +63,7 @@ export default function LoginScreen() {
           showsVerticalScrollIndicator={false}
         >
           {/* Brand */}
-          <View className="mb-xl items-center">
+          <View className="mb-lg items-center">
             <LinearGradient
               colors={[Palette.primary, Palette.secondary]}
               start={{ x: 0, y: 0 }}
@@ -84,15 +94,34 @@ export default function LoginScreen() {
 
           {/* Card */}
           <View className="rounded-xl border border-white/10 bg-white/5 p-xl">
-            <Text className="font-inter-semibold text-[22px] text-on-surface">Welcome back</Text>
-            <Text className="mt-xs font-inter text-[14px] text-on-surface-variant">
-              Sign in to continue to your account.
+            <Text className="font-inter-semibold text-[22px] text-on-surface">
+              Create account
             </Text>
+            <Text className="mt-xs font-inter text-[14px] text-on-surface-variant">
+              Sign up to get started with Dipanix.
+            </Text>
+
+            {/* Name */}
+            <View className="mt-lg">
+              <Text className="ml-xs font-inter-medium text-[14px] text-on-surface">Name</Text>
+              <View className="mt-sm flex-row items-center rounded-lg border border-white/10 bg-surface-container-lowest px-md">
+                <MaterialIcons name="person-outline" size={20} color={Palette.outline} />
+                <TextInput
+                  className="ml-sm flex-1 py-md font-inter text-[16px] text-on-surface"
+                  placeholder="Your name"
+                  placeholderTextColor={`${Palette.outline}99`}
+                  autoCapitalize="words"
+                  autoComplete="name"
+                  value={name}
+                  onChangeText={setName}
+                />
+              </View>
+            </View>
 
             {/* Email */}
             <View className="mt-lg">
               <Text className="ml-xs font-inter-medium text-[14px] text-on-surface">Email</Text>
-              <View className="mt-sm flex-row items-center rounded-lg border border-white/10 bg-surface-container-lowest px-md focus:border-primary">
+              <View className="mt-sm flex-row items-center rounded-lg border border-white/10 bg-surface-container-lowest px-md">
                 <MaterialIcons name="mail-outline" size={20} color={Palette.outline} />
                 <TextInput
                   className="ml-sm flex-1 py-md font-inter text-[16px] text-on-surface"
@@ -110,27 +139,18 @@ export default function LoginScreen() {
 
             {/* Password */}
             <View className="mt-lg">
-              <View className="flex-row items-center justify-between px-xs">
-                <Text className="font-inter-medium text-[14px] text-on-surface">Password</Text>
-                <Pressable hitSlop={8}>
-                  <Text className="font-inter-medium text-[13px] text-primary">
-                    Forgot password?
-                  </Text>
-                </Pressable>
-              </View>
+              <Text className="ml-xs font-inter-medium text-[14px] text-on-surface">Password</Text>
               <View className="mt-sm flex-row items-center rounded-lg border border-white/10 bg-surface-container-lowest px-md">
                 <MaterialIcons name="lock-outline" size={20} color={Palette.outline} />
                 <TextInput
                   className="ml-sm flex-1 py-md font-inter text-[16px] text-on-surface"
-                  placeholder="Enter your password"
+                  placeholder={`At least ${MIN_PASSWORD} characters`}
                   placeholderTextColor={`${Palette.outline}99`}
                   secureTextEntry={!showPassword}
                   autoCapitalize="none"
-                  autoComplete="password"
+                  autoComplete="password-new"
                   value={password}
                   onChangeText={setPassword}
-                  onSubmitEditing={signIn}
-                  returnKeyType="go"
                 />
                 <Pressable hitSlop={8} onPress={() => setShowPassword((v) => !v)}>
                   <MaterialIcons
@@ -142,9 +162,43 @@ export default function LoginScreen() {
               </View>
             </View>
 
-            {/* Sign in */}
+            {/* Confirm password */}
+            <View className="mt-lg">
+              <Text className="ml-xs font-inter-medium text-[14px] text-on-surface">
+                Confirm password
+              </Text>
+              <View
+                className={`mt-sm flex-row items-center rounded-lg border bg-surface-container-lowest px-md ${
+                  confirmMismatch ? 'border-error/60' : 'border-white/10'
+                }`}
+              >
+                <MaterialIcons name="lock-outline" size={20} color={Palette.outline} />
+                <TextInput
+                  className="ml-sm flex-1 py-md font-inter text-[16px] text-on-surface"
+                  placeholder="Re-enter your password"
+                  placeholderTextColor={`${Palette.outline}99`}
+                  secureTextEntry={!showPassword}
+                  autoCapitalize="none"
+                  autoComplete="password-new"
+                  value={confirm}
+                  onChangeText={setConfirm}
+                  onSubmitEditing={signUp}
+                  returnKeyType="go"
+                />
+                {passwordsMatch && (
+                  <MaterialIcons name="check-circle" size={20} color={Palette.tertiary} />
+                )}
+              </View>
+              {confirmMismatch && (
+                <Text className="ml-xs mt-xs font-inter text-[12px] text-error">
+                  Passwords don&apos;t match.
+                </Text>
+              )}
+            </View>
+
+            {/* Create account */}
             <Pressable
-              onPress={signIn}
+              onPress={signUp}
               disabled={!canSubmit}
               className="mt-xl active:scale-[0.98]"
               style={{ opacity: canSubmit ? 1 : 0.5 }}
@@ -155,7 +209,7 @@ export default function LoginScreen() {
                 end={{ x: 1, y: 0 }}
                 style={{ borderRadius: 8, paddingVertical: 16, alignItems: 'center' }}
               >
-                <Text className="font-inter-semibold text-[16px] text-white">Sign In</Text>
+                <Text className="font-inter-semibold text-[16px] text-white">Create Account</Text>
               </LinearGradient>
             </Pressable>
           </View>
@@ -163,10 +217,10 @@ export default function LoginScreen() {
           {/* Footer */}
           <View className="mt-xl flex-row items-center justify-center">
             <Text className="font-inter text-[14px] text-on-surface-variant">
-              Don&apos;t have an account?{' '}
+              Already have an account?{' '}
             </Text>
-            <Pressable hitSlop={8} onPress={() => router.push('/signup')}>
-              <Text className="font-inter-bold text-[14px] text-primary">Sign Up</Text>
+            <Pressable hitSlop={8} onPress={() => router.replace('/login')}>
+              <Text className="font-inter-bold text-[14px] text-primary">Sign In</Text>
             </Pressable>
           </View>
         </ScrollView>
