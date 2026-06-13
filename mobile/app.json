@@ -68,6 +68,12 @@
         {
           "faceIDPermission": "Dipanix uses Face ID to unlock the app."
         }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Dipanix needs access to your photos so you can set a profile picture."
+        }
       ]
     ],
     "experiments": {

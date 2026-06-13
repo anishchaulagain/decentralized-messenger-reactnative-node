@@ -5,6 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Avatar } from '@/components/avatar';
 import { useCall } from '@/context/call';
+import { avatarUri } from '@/lib/avatar';
 import { Palette } from '@/constants/palette';
 
 function fmt(sec: number): string {
@@ -96,11 +97,7 @@ export function CallOverlay() {
           {/* Caller identity */}
           <View className="mt-xl items-center px-container-padding">
             {!showVideo && (
-              <Avatar
-                uri={`https://i.pravatar.cc/150?u=${contact?.id ?? ''}`}
-                size={120}
-                showStatus={false}
-              />
+              <Avatar uri={avatarUri(contact)} size={120} showStatus={false} />
             )}
             <Text
               className="mt-lg font-inter-bold text-[26px] text-on-surface"

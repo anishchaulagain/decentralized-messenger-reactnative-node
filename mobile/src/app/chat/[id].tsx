@@ -19,6 +19,7 @@ import { Avatar } from '@/components/avatar';
 import { useAuth } from '@/context/auth';
 import { useCall } from '@/context/call';
 import { conversationsApi, type ConversationSummary, type PublicUser } from '@/lib/api';
+import { avatarUri } from '@/lib/avatar';
 import { encryptMessage } from '@/lib/crypto';
 import { decryptForMe } from '@/lib/messages';
 import { emitSocket, onSocket } from '@/lib/socket';
@@ -465,7 +466,7 @@ export default function ChatScreen() {
           </>
         ) : (
           <>
-            <Avatar uri={`https://i.pravatar.cc/150?u=${contact?.id ?? id}`} size={38} showStatus={false} />
+            <Avatar uri={avatarUri(contact, id)} size={38} showStatus={false} />
             <View className="ml-2 min-w-0 flex-1">
               <Text className="font-inter-semibold text-[17px] text-on-surface" numberOfLines={1}>
                 {contact?.name ?? 'Chat'}

@@ -6,6 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Avatar } from '@/components/avatar';
 import { conversationsApi, type PublicUser } from '@/lib/api';
+import { avatarUri } from '@/lib/avatar';
 import { getPublicKey, safetyNumber } from '@/lib/crypto';
 import { isVerified, setVerified } from '@/lib/verification';
 import { Palette } from '@/constants/palette';
@@ -70,7 +71,7 @@ export default function VerifyScreen() {
       ) : (
         <ScrollView contentContainerClassName="px-container-padding pb-xl pt-lg">
           <View className="items-center">
-            <Avatar uri={`https://i.pravatar.cc/150?u=${contact?.id}`} size={72} showStatus={false} />
+            <Avatar uri={avatarUri(contact, id)} size={72} showStatus={false} />
             <Text className="mt-md font-inter-bold text-[20px] text-on-surface">{contact?.name}</Text>
             <View className="mt-xs flex-row items-center gap-xs">
               <MaterialIcons name="lock" size={14} color={Palette.tertiary} />

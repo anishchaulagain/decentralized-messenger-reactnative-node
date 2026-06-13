@@ -6,6 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Avatar } from '@/components/avatar';
 import { ApiError, requestsApi, usersApi, type PublicUser, type Relationship } from '@/lib/api';
+import { avatarUri } from '@/lib/avatar';
 import { Palette } from '@/constants/palette';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -143,7 +144,7 @@ export default function NewChatScreen() {
 
         {result && (
           <View className="mt-lg flex-row items-center rounded-xl border border-white/10 bg-white/5 p-md">
-            <Avatar uri={`https://i.pravatar.cc/150?u=${result.user.id}`} size={48} showStatus={false} />
+            <Avatar uri={avatarUri(result.user)} size={48} showStatus={false} />
             <View className="ml-md flex-1">
               <Text className="font-inter-bold text-[16px] text-on-surface">{result.user.name}</Text>
               <Text className="font-inter text-[13px] text-on-surface-variant">{result.user.email}</Text>

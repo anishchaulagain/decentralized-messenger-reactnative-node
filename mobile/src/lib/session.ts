@@ -12,6 +12,7 @@ export interface SessionUser {
   role: Role;
   status: AccountStatus;
   publicKey: string | null;
+  avatar: string | null;
 }
 
 export interface Session {

@@ -10,6 +10,7 @@ import {
   keyBackupSchema,
   registerPushTokenSchema,
   unregisterPushTokenSchema,
+  updateAvatarSchema,
   updatePublicKeySchema,
   userSearchQuery,
 } from '../schemas';
@@ -17,6 +18,22 @@ import {
 const router = Router();
 
 router.use(authenticate, requireApproved);
+
+// Update (or remove) the caller's profile photo. Stored as a small base64 data
+// URI and exposed to contacts via the public-user shape.
+router.put(
+  '/me/avatar',
+  validateBody(updateAvatarSchema),
+  asyncHandler(async (req, res) => {
+    const { avatar } = req.body as { avatar: string | null };
+    const user = await prisma.user.update({
+      where: { id: req.user!.id },
+      data: { avatar },
+      omit: { passwordHash: true },
+    });
+    res.json({ user });
+  }),
+);
 
 // Register/replace the caller's E2EE public key. The private key stays on the
 // device; the server only ever stores this public half.

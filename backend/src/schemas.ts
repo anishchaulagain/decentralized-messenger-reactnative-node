@@ -77,6 +77,16 @@ export const keyBackupSchema = z.object({
   backup: z.string().min(1).max(20000),
 });
 
+// Profile photo: a small base64 image data URI, or null to remove it. Capped
+// well under the 64KB request-body limit (the client resizes before upload).
+export const updateAvatarSchema = z.object({
+  avatar: z
+    .string()
+    .regex(/^data:image\/(jpeg|jpg|png|webp);base64,/, 'Must be an image data URL')
+    .max(60000, 'Image too large — please pick a smaller photo')
+    .nullable(),
+});
+
 // Encrypted message: base64 ciphertext + 24-byte NaCl box nonce.
 export const sendMessageSchema = z.object({
   ciphertext: base64.max(8000, 'Ciphertext too large'),

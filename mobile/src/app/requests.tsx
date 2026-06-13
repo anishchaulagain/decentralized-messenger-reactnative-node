@@ -6,6 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Avatar } from '@/components/avatar';
 import { requestsApi, type MessageRequest } from '@/lib/api';
+import { avatarUri } from '@/lib/avatar';
 import { onSocket } from '@/lib/socket';
 import { Palette } from '@/constants/palette';
 
@@ -90,7 +91,7 @@ export default function RequestsScreen() {
                 key={req.id}
                 className="mb-sm flex-row items-center rounded-xl border border-white/10 bg-white/5 p-md"
               >
-                <Avatar uri={`https://i.pravatar.cc/150?u=${req.requester?.id}`} size={44} showStatus={false} />
+                <Avatar uri={avatarUri(req.requester)} size={44} showStatus={false} />
                 <View className="ml-md flex-1">
                   <Text className="font-inter-bold text-[15px] text-on-surface">{req.requester?.name}</Text>
                   <Text className="font-inter text-[12px] text-on-surface-variant">{req.requester?.email}</Text>
@@ -129,7 +130,7 @@ export default function RequestsScreen() {
                 key={req.id}
                 className="mb-sm flex-row items-center rounded-xl border border-white/10 bg-white/5 p-md"
               >
-                <Avatar uri={`https://i.pravatar.cc/150?u=${req.recipient?.id}`} size={44} showStatus={false} />
+                <Avatar uri={avatarUri(req.recipient)} size={44} showStatus={false} />
                 <View className="ml-md flex-1">
                   <Text className="font-inter-bold text-[15px] text-on-surface">{req.recipient?.name}</Text>
                   <Text className="font-inter text-[12px] text-on-surface-variant">{req.recipient?.email}</Text>

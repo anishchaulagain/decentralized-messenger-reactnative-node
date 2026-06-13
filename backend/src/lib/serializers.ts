@@ -10,10 +10,11 @@ export interface PublicUser {
   email: string;
   status: User['status'];
   publicKey: string | null;
+  avatar: string | null;
 }
 
 export function toPublicUser(
-  user: Pick<User, 'id' | 'name' | 'email' | 'status' | 'publicKey'>,
+  user: Pick<User, 'id' | 'name' | 'email' | 'status' | 'publicKey' | 'avatar'>,
 ): PublicUser {
   return {
     id: user.id,
@@ -21,6 +22,7 @@ export function toPublicUser(
     email: user.email,
     status: user.status,
     publicKey: user.publicKey,
+    avatar: user.avatar,
   };
 }
 
@@ -31,4 +33,5 @@ export const publicUserSelect = {
   email: true,
   status: true,
   publicKey: true,
+  avatar: true,
 } as const;
