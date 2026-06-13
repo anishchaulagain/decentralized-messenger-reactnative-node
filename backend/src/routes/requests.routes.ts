@@ -114,17 +114,19 @@ router.post(
     const request = await loadPendingForRecipient(id, me);
     const [userAId, userBId] = orderedPair(request.requesterId, request.recipientId);
 
-    const conversation = await prisma.$transaction(async (tx) => {
-      await tx.messageRequest.update({
+    // Batch (single round trip) — more robust over a high-latency cloud DB than
+    // an interactive transaction held open across awaits.
+    const [, conversation] = await prisma.$transaction([
+      prisma.messageRequest.update({
         where: { id: request.id },
         data: { status: 'ACCEPTED' },
-      });
-      return tx.conversation.upsert({
+      }),
+      prisma.conversation.upsert({
         where: { userAId_userBId: { userAId, userBId } },
         update: {},
         create: { userAId, userBId },
-      });
-    });
+      }),
+    ]);
 
     res.json({ message: 'Request accepted', conversation });
   }),

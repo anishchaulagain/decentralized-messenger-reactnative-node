@@ -40,6 +40,11 @@ model User {
   // key never leaves the user's device, so the server cannot read messages.
   publicKey String?
 
+  // Opaque, passphrase-encrypted backup of the user's private key. The server
+  // stores it but cannot decrypt it (no passphrase), enabling key — and thus
+  // message-history — recovery after a reinstall.
+  keyBackup String?
+
   // Admin moderation trail
   reviewedAt   DateTime?
   reviewedBy   User?         @relation("Reviewer", fields: [reviewedById], references: [id])

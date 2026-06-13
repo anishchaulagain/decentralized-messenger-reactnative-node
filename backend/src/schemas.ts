@@ -50,6 +50,11 @@ export const updatePublicKeySchema = z.object({
   publicKey: publicKeySchema,
 });
 
+// Opaque passphrase-encrypted private-key backup (a JSON blob the server can't read).
+export const keyBackupSchema = z.object({
+  backup: z.string().min(1).max(20000),
+});
+
 // Encrypted message: base64 ciphertext + 24-byte NaCl box nonce.
 export const sendMessageSchema = z.object({
   ciphertext: base64.max(8000, 'Ciphertext too large'),

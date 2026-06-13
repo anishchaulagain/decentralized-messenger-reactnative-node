@@ -7,6 +7,7 @@
  */
 import 'dotenv/config';
 import { PrismaClient } from '@prisma/client';
+import { scrypt } from 'scrypt-js';
 import nacl from 'tweetnacl';
 import {
   decodeBase64,
@@ -16,6 +17,24 @@ import {
 } from 'tweetnacl-util';
 
 const prisma = new PrismaClient();
+
+// Encrypted key backup, mirroring mobile/src/lib/crypto.ts.
+async function createBackup(secretKey: Uint8Array, passphrase: string): Promise<string> {
+  const salt = nacl.randomBytes(16);
+  const nonce = nacl.randomBytes(nacl.secretbox.nonceLength);
+  const key = new Uint8Array(await scrypt(decodeUTF8(passphrase.normalize('NFKC')), salt, 16384, 8, 1, 32));
+  const ct = nacl.secretbox(secretKey, nonce, key);
+  return JSON.stringify({
+    v: 1, kdf: 'scrypt', N: 16384, r: 8, p: 1,
+    salt: encodeBase64(salt), nonce: encodeBase64(nonce), ciphertext: encodeBase64(ct),
+  });
+}
+
+async function restoreBackup(blobJson: string, passphrase: string): Promise<Uint8Array | null> {
+  const b = JSON.parse(blobJson);
+  const key = new Uint8Array(await scrypt(decodeUTF8(passphrase.normalize('NFKC')), decodeBase64(b.salt), b.N, b.r, b.p, 32));
+  return nacl.secretbox.open(decodeBase64(b.ciphertext), decodeBase64(b.nonce), key);
+}
 
 // Client-side crypto, mirroring what the mobile app does (tweetnacl box).
 function encrypt(plaintext: string, theirPublicKeyB64: string, mySecretKey: Uint8Array) {
@@ -244,6 +263,41 @@ async function main() {
   // Non-participant cannot read the conversation
   const adminPeek = await api('GET', `/api/conversations/${conversationId}/messages`, undefined, adminToken);
   check('non-participant blocked from messages -> 403/404', adminPeek.status === 403 || adminPeek.status === 404);
+
+  // --- Encrypted key backup + reinstall recovery ---
+  const recoveryPass = 'correct horse battery staple';
+  const backupBlob = await createBackup(aliceKeys.secretKey, recoveryPass);
+  const up = await api('PUT', '/api/users/me/key-backup', { backup: backupBlob }, aliceToken);
+  check('Alice uploads encrypted key backup', up.status === 200);
+
+  // Server stores it but cannot read the private key inside.
+  const down = await api('GET', '/api/users/me/key-backup', undefined, aliceToken);
+  check(
+    'server returns an opaque backup (no raw private key)',
+    !!down.data.backup && !down.data.backup.includes(encodeBase64(aliceKeys.secretKey)),
+  );
+
+  // Wrong passphrase cannot restore.
+  const wrong = await restoreBackup(down.data.backup, 'not the passphrase');
+  check('wrong passphrase cannot restore the key', wrong === null);
+
+  // Simulate reinstall: restore the key from the backup with the passphrase.
+  const restored = await restoreBackup(down.data.backup, recoveryPass);
+  check(
+    'recovery restores the exact private key',
+    !!restored && encodeBase64(restored) === encodeBase64(aliceKeys.secretKey),
+  );
+
+  // With the restored key, message history (still ciphertext on the server) decrypts again.
+  const history = await api('GET', `/api/conversations/${conversationId}/messages`, undefined, aliceToken);
+  const bobsMessage = history.data.messages[1];
+  const recoveredText = decrypt(
+    bobsMessage.ciphertext,
+    bobsMessage.nonce,
+    bobsMessage.senderPublicKey,
+    restored!,
+  );
+  check('message history is readable after reinstall', recoveredText === plaintext2, recoveredText);
 
   // --- Access / refresh token lifecycle ---
   const freshLogin = await api('POST', '/api/auth/login', { email: aliceEmail, password: pw });

@@ -72,6 +72,8 @@ on logout. Reusing a rotated token revokes the whole chain (theft protection).
 | Method | Path | Body | Notes |
 |---|---|---|---|
 | `PUT` | `/api/users/me/keys` | `{ publicKey }` | Register/replace your E2EE public key (base64 X25519) |
+| `PUT` | `/api/users/me/key-backup` | `{ backup }` | Store the passphrase-encrypted private-key backup (opaque blob) |
+| `GET` | `/api/users/me/key-backup` | — | Fetch the encrypted backup (for recovery after reinstall) |
 | `GET` | `/api/users/search?email=` | — | Find an approved user by email (incl. their public key) + relationship state |
 | `POST` | `/api/requests` | `{ recipientId }` | Send a message request |
 | `GET` | `/api/requests/incoming` | — | Pending requests sent to me |
@@ -110,6 +112,37 @@ The shared secret is symmetric, so both participants — and only they — can d
 Client crypto lives in `mobile/src/lib/crypto.ts`; the backend smoke test
 (`npm run smoke`) exercises the full encrypt → store → decrypt round-trip and
 asserts the database never holds plaintext.
+
+### Key verification (anti-MITM)
+
+Because the server distributes public keys, a malicious server could swap one in.
+The client derives a **safety number** (SHA-512 of both public keys, order-independent
+— 12 groups of 5 digits, like Signal) that both people compare out-of-band. If it
+matches, no key was substituted. See `safetyNumber()` in `mobile/src/lib/crypto.ts`
+and the verify screen at `mobile/src/app/verify/[id].tsx`.
+
+### Encrypted key backup & recovery (survives reinstall)
+
+The private key normally lives only on the device, so reinstalling would lose it —
+and with it, the ability to read message history. To recover:
+
+1. The client encrypts its private key under a **user-chosen recovery passphrase**
+   (scrypt KDF → NaCl secretbox) and uploads the opaque blob (`PUT /me/key-backup`).
+   The server stores it but **cannot decrypt it** without the passphrase.
+2. After reinstalling, the user logs in, downloads the blob (`GET /me/key-backup`),
+   and enters the passphrase to restore the exact same private key.
+3. Since the server still holds all message **ciphertext**, restoring the key makes
+   the **entire history decryptable again** — no separate message backup needed.
+
+The smoke test proves this end-to-end: back up → simulate reinstall (wipe key) →
+restore with passphrase → decrypt a historical message (and confirms a wrong
+passphrase fails). `createEncryptedBackup()` / `restoreFromBackup()` live in
+`mobile/src/lib/crypto.ts`.
+
+> The backup's security rests on passphrase strength (scrypt slows brute force).
+> For high-value deployments, add server-side rate-limiting / an HSM-backed recovery
+> service (à la Signal SVR). The recovery passphrase is independent of the login
+> password and is never sent to the server.
 
 **Not yet implemented:** forward secrecy. A single long-term keypair per user means
 a leaked private key exposes past messages. A Double-Ratchet layer (Signal-style)

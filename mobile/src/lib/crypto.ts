@@ -8,10 +8,15 @@
 import 'react-native-get-random-values';
 
 import * as SecureStore from 'expo-secure-store';
+import { scrypt } from 'scrypt-js';
 import nacl from 'tweetnacl';
 import { decodeBase64, decodeUTF8, encodeBase64, encodeUTF8 } from 'tweetnacl-util';
 
 const SECRET_KEY_STORE = 'dipanix.e2ee.secretKey';
+
+// scrypt work factors for the recovery-passphrase KDF (one-time backup/restore).
+const SCRYPT = { N: 16384, r: 8, p: 1, dkLen: 32 };
+const BACKUP_VERSION = 1;
 
 export interface KeyPair {
   publicKey: string; // base64
@@ -102,4 +107,76 @@ export async function decryptMessage(
     secretKey,
   );
   return opened ? encodeUTF8(opened) : null;
+}
+
+// --- Encrypted key backup (survives reinstall / new device) ---
+//
+// The private key is encrypted under a key derived from a user-chosen recovery
+// passphrase (scrypt) and wrapped with NaCl secretbox. The resulting blob is
+// uploaded to the server, which cannot read it without the passphrase. On a new
+// device the user logs in, downloads the blob, and decrypts it with the
+// passphrase — restoring the key and, because the server still holds all
+// ciphertext, the entire message history.
+
+interface BackupBlob {
+  v: number;
+  kdf: 'scrypt';
+  N: number;
+  r: number;
+  p: number;
+  salt: string; // base64
+  nonce: string; // base64
+  ciphertext: string; // base64 secretbox(secretKey)
+}
+
+async function deriveKey(passphrase: string, salt: Uint8Array): Promise<Uint8Array> {
+  const pw = decodeUTF8(passphrase.normalize('NFKC'));
+  const key = await scrypt(pw, salt, SCRYPT.N, SCRYPT.r, SCRYPT.p, SCRYPT.dkLen);
+  return new Uint8Array(key);
+}
+
+/** Produces an encrypted backup of this device's private key. Upload it via
+ *  PUT /api/users/me/key-backup. */
+export async function createEncryptedBackup(passphrase: string): Promise<string> {
+  const { secretKey } = await getOrCreateKeyPair();
+  const salt = nacl.randomBytes(16);
+  const nonce = nacl.randomBytes(nacl.secretbox.nonceLength);
+  const wrappingKey = await deriveKey(passphrase, salt);
+  const ciphertext = nacl.secretbox(secretKey, nonce, wrappingKey);
+
+  const blob: BackupBlob = {
+    v: BACKUP_VERSION,
+    kdf: 'scrypt',
+    N: SCRYPT.N,
+    r: SCRYPT.r,
+    p: SCRYPT.p,
+    salt: encodeBase64(salt),
+    nonce: encodeBase64(nonce),
+    ciphertext: encodeBase64(ciphertext),
+  };
+  return JSON.stringify(blob);
+}
+
+/**
+ * Restores the private key from an encrypted backup (downloaded from
+ * GET /api/users/me/key-backup) using the recovery passphrase, and persists it
+ * to the device. Throws if the passphrase is wrong or the blob is malformed.
+ * Returns the restored public key.
+ */
+export async function restoreFromBackup(passphrase: string, blobJson: string): Promise<string> {
+  const blob = JSON.parse(blobJson) as BackupBlob;
+  const wrappingKey = await deriveKey(passphrase, decodeBase64(blob.salt));
+  const secretKey = nacl.secretbox.open(
+    decodeBase64(blob.ciphertext),
+    decodeBase64(blob.nonce),
+    wrappingKey,
+  );
+  if (!secretKey) {
+    throw new Error('Incorrect recovery passphrase');
+  }
+
+  await SecureStore.setItemAsync(SECRET_KEY_STORE, encodeBase64(secretKey));
+  const pair = nacl.box.keyPair.fromSecretKey(secretKey);
+  cached = { publicKey: encodeBase64(pair.publicKey), secretKey };
+  return cached.publicKey;
 }

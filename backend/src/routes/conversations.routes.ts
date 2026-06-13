@@ -126,8 +126,10 @@ router.post(
       throw new ApiError(400, 'The recipient has not set up encryption yet');
     }
 
-    const message = await prisma.$transaction(async (tx) => {
-      const created = await tx.message.create({
+    // Batch (single round trip) — more robust over a high-latency cloud DB than
+    // an interactive transaction. Also bumps the conversation to the top.
+    const [message] = await prisma.$transaction([
+      prisma.message.create({
         data: {
           conversationId: id,
           senderId: me,
@@ -137,11 +139,9 @@ router.post(
           recipientPublicKey: recipient.publicKey!,
         },
         select: messageSelect,
-      });
-      // Bump the conversation so it sorts to the top of the list.
-      await tx.conversation.update({ where: { id }, data: { updatedAt: new Date() } });
-      return created;
-    });
+      }),
+      prisma.conversation.update({ where: { id }, data: { updatedAt: new Date() } }),
+    ]);
 
     res.status(201).json({ message });
   }),

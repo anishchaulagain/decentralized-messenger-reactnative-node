@@ -6,7 +6,7 @@ import { prisma } from '../lib/prisma';
 import { toPublicUser } from '../lib/serializers';
 import { authenticate, requireApproved } from '../middleware/auth';
 import { validateBody, validateQuery } from '../middleware/validate';
-import { updatePublicKeySchema, userSearchQuery } from '../schemas';
+import { keyBackupSchema, updatePublicKeySchema, userSearchQuery } from '../schemas';
 
 const router = Router();
 
@@ -25,6 +25,29 @@ router.put(
       omit: { passwordHash: true },
     });
     res.json({ user });
+  }),
+);
+
+// Store the passphrase-encrypted private-key backup (opaque to the server).
+router.put(
+  '/me/key-backup',
+  validateBody(keyBackupSchema),
+  asyncHandler(async (req, res) => {
+    const { backup } = req.body as { backup: string };
+    await prisma.user.update({ where: { id: req.user!.id }, data: { keyBackup: backup } });
+    res.json({ ok: true });
+  }),
+);
+
+// Retrieve the encrypted backup (e.g. after reinstalling on a new device).
+router.get(
+  '/me/key-backup',
+  asyncHandler(async (req, res) => {
+    const user = await prisma.user.findUnique({
+      where: { id: req.user!.id },
+      select: { keyBackup: true },
+    });
+    res.json({ backup: user?.keyBackup ?? null });
   }),
 );
 
