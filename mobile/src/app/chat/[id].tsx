@@ -391,68 +391,78 @@ export default function ChatScreen() {
   return (
     <SafeAreaView className="flex-1 bg-background">
       {/* Header */}
-      <View className="h-16 flex-row items-center gap-md border-b border-white/5 bg-surface-container/70 px-container-padding">
-        <Pressable onPress={() => router.back()} className="-ml-2 h-10 w-10 items-center justify-center active:scale-95">
+      <View className="h-16 flex-row items-center border-b border-white/5 bg-surface-container/70 px-container-padding">
+        <Pressable onPress={() => router.back()} className="-ml-2 h-10 w-8 items-center justify-center active:scale-95">
           <MaterialIcons name="arrow-back-ios-new" size={20} color={Palette.primary} />
         </Pressable>
+
         {searchOpen ? (
-          <TextInput
-            autoFocus
-            className="h-10 flex-1 rounded-full border border-white/5 bg-surface-container-lowest px-md font-inter text-[15px] text-on-surface"
-            placeholder="Search this chat…"
-            placeholderTextColor={Palette.outline}
-            value={query}
-            onChangeText={setQuery}
-          />
+          <>
+            <TextInput
+              autoFocus
+              className="ml-1 h-10 flex-1 rounded-full border border-white/5 bg-surface-container-lowest px-md font-inter text-[15px] text-on-surface"
+              placeholder="Search this chat…"
+              placeholderTextColor={Palette.outline}
+              value={query}
+              onChangeText={setQuery}
+            />
+            <Pressable
+              onPress={() => {
+                setSearchOpen(false);
+                setQuery('');
+              }}
+              className="ml-1 h-9 w-9 items-center justify-center active:scale-90"
+            >
+              <MaterialIcons name="close" size={20} color={Palette.primary} />
+            </Pressable>
+          </>
         ) : (
           <>
-            <Avatar uri={`https://i.pravatar.cc/150?u=${contact?.id ?? id}`} size={40} showStatus={false} />
-            <View className="min-w-0 flex-1">
-              <Text className="font-inter-semibold text-[18px] text-on-surface" numberOfLines={1}>
+            <Avatar uri={`https://i.pravatar.cc/150?u=${contact?.id ?? id}`} size={38} showStatus={false} />
+            <View className="ml-2 min-w-0 flex-1">
+              <Text className="font-inter-semibold text-[17px] text-on-surface" numberOfLines={1}>
                 {contact?.name ?? 'Chat'}
               </Text>
-              <Text className="font-inter-semibold text-[12px] text-tertiary">
+              <Text className="font-inter-semibold text-[11px] text-tertiary" numberOfLines={1}>
                 {otherTyping ? 'typing…' : 'End-to-end encrypted'}
               </Text>
             </View>
+
+            {/* Action buttons — tight cluster so the name keeps its space */}
+            <View className="flex-row items-center">
+              <Pressable
+                onPress={() => contact && id && call.startCall(id, contact, 'AUDIO')}
+                disabled={!contact?.publicKey}
+                className="h-9 w-9 items-center justify-center active:scale-90"
+                style={{ opacity: contact?.publicKey ? 1 : 0.4 }}
+              >
+                <MaterialIcons name="call" size={20} color={Palette.primary} />
+              </Pressable>
+              <Pressable
+                onPress={() => contact && id && call.startCall(id, contact, 'VIDEO')}
+                disabled={!contact?.publicKey}
+                className="h-9 w-9 items-center justify-center active:scale-90"
+                style={{ opacity: contact?.publicKey ? 1 : 0.4 }}
+              >
+                <MaterialIcons name="videocam" size={20} color={Palette.primary} />
+              </Pressable>
+              <Pressable
+                onPress={() => {
+                  setSearchOpen(true);
+                  setQuery('');
+                }}
+                className="h-9 w-9 items-center justify-center active:scale-90"
+              >
+                <MaterialIcons name="search" size={20} color={Palette.primary} />
+              </Pressable>
+              <Pressable
+                onPress={() => router.push(`/verify/${id}`)}
+                className="h-9 w-9 items-center justify-center active:scale-90"
+              >
+                <MaterialIcons name="verified-user" size={20} color={Palette.tertiary} />
+              </Pressable>
+            </View>
           </>
-        )}
-        {!searchOpen && (
-          <>
-            <Pressable
-              onPress={() => contact && id && call.startCall(id, contact, 'AUDIO')}
-              disabled={!contact?.publicKey}
-              className="h-10 w-10 items-center justify-center active:scale-90"
-              style={{ opacity: contact?.publicKey ? 1 : 0.4 }}
-            >
-              <MaterialIcons name="call" size={22} color={Palette.primary} />
-            </Pressable>
-            <Pressable
-              onPress={() => contact && id && call.startCall(id, contact, 'VIDEO')}
-              disabled={!contact?.publicKey}
-              className="h-10 w-10 items-center justify-center active:scale-90"
-              style={{ opacity: contact?.publicKey ? 1 : 0.4 }}
-            >
-              <MaterialIcons name="videocam" size={22} color={Palette.primary} />
-            </Pressable>
-          </>
-        )}
-        <Pressable
-          onPress={() => {
-            setSearchOpen((v) => !v);
-            setQuery('');
-          }}
-          className="h-10 w-10 items-center justify-center active:scale-90"
-        >
-          <MaterialIcons name={searchOpen ? 'close' : 'search'} size={22} color={Palette.primary} />
-        </Pressable>
-        {!searchOpen && (
-          <Pressable
-            onPress={() => router.push(`/verify/${id}`)}
-            className="h-10 w-10 items-center justify-center active:scale-90"
-          >
-            <MaterialIcons name="verified-user" size={22} color={Palette.tertiary} />
-          </Pressable>
         )}
       </View>
 
