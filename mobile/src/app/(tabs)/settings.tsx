@@ -1,11 +1,15 @@
 import { MaterialIcons } from '@expo/vector-icons';
+import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
+import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Alert, Pressable, ScrollView, Switch, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Pressable, ScrollView, Switch, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Avatar } from '@/components/avatar';
 import { useAuth } from '@/context/auth';
+import { usersApi } from '@/lib/api';
+import { avatarUri } from '@/lib/avatar';
 import {
   authenticate,
   biometricLabel,
@@ -13,6 +17,7 @@ import {
   isBiometricLockEnabled,
   setBiometricLockEnabled,
 } from '@/lib/biometrics';
+import { patchUser } from '@/lib/session';
 import { Palette } from '@/constants/palette';
 
 interface ItemProps {
@@ -104,6 +109,40 @@ export default function SettingsScreen() {
   const [bioEnabled, setBioEnabled] = useState(false);
   const [bioLabel, setBioLabel] = useState('Biometrics');
   const [bioBusy, setBioBusy] = useState(false);
+  const [avatarBusy, setAvatarBusy] = useState(false);
+
+  const changeAvatar = async () => {
+    if (avatarBusy) return;
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) {
+      Alert.alert('Permission needed', 'Allow photo access to set a profile picture.');
+      return;
+    }
+    const picked = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 1,
+    });
+    if (picked.canceled || !picked.assets?.[0]) return;
+
+    setAvatarBusy(true);
+    try {
+      // Resize/compress to a small thumbnail so it stays well under the API's
+      // body limit and the DB stays lean.
+      const rendered = await ImageManipulator.manipulate(picked.assets[0].uri)
+        .resize({ width: 256 })
+        .renderAsync();
+      const out = await rendered.saveAsync({ format: SaveFormat.JPEG, compress: 0.5, base64: true });
+      const dataUri = `data:image/jpeg;base64,${out.base64}`;
+      const { user: updated } = await usersApi.updateAvatar(dataUri);
+      await patchUser({ avatar: updated.avatar });
+    } catch (e) {
+      Alert.alert('Profile photo', e instanceof Error ? e.message : 'Could not update your photo.');
+    } finally {
+      setAvatarBusy(false);
+    }
+  };
 
   useEffect(() => {
     let active = true;
@@ -159,7 +198,16 @@ export default function SettingsScreen() {
       <ScrollView contentContainerClassName="px-container-padding pb-28 pt-lg">
         {/* Profile overview */}
         <View className="mb-xl items-center">
-          <Avatar uri={`https://i.pravatar.cc/150?u=${user?.id}`} size={88} showStatus={false} />
+          <Pressable onPress={changeAvatar} disabled={avatarBusy} className="active:scale-95">
+            <Avatar uri={avatarUri(user)} size={88} showStatus={false} />
+            <View className="absolute bottom-0 right-0 h-7 w-7 items-center justify-center rounded-full border-2 border-background bg-primary">
+              {avatarBusy ? (
+                <ActivityIndicator size="small" color={Palette.onPrimary} />
+              ) : (
+                <MaterialIcons name="photo-camera" size={15} color={Palette.onPrimary} />
+              )}
+            </View>
+          </Pressable>
           <Text className="mt-md font-inter-bold text-[22px] text-on-surface">{user?.name}</Text>
           <Text className="font-inter text-[14px] text-on-surface-variant">{user?.email}</Text>
         </View>

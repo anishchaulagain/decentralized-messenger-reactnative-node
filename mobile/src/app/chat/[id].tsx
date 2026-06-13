@@ -19,6 +19,7 @@ import { Avatar } from '@/components/avatar';
 import { useAuth } from '@/context/auth';
 import { useCall } from '@/context/call';
 import { conversationsApi, type ConversationSummary, type PublicUser } from '@/lib/api';
+import { avatarUri } from '@/lib/avatar';
 import { encryptMessage } from '@/lib/crypto';
 import { decryptForMe } from '@/lib/messages';
 import { emitSocket, onSocket } from '@/lib/socket';
@@ -42,6 +43,7 @@ interface DisplayMessage {
   deleted: boolean;
   reactions: DisplayReaction[];
   reply: { text: string; outgoing: boolean } | null;
+  pending?: boolean; // shown optimistically, not yet confirmed by the server
 }
 
 function formatTime(iso: string): string {
@@ -144,9 +146,12 @@ function Bubble({
         {message.edited && !message.deleted && (
           <Text className="font-inter text-[11px] text-outline opacity-60">edited</Text>
         )}
-        {message.outgoing && message.read && (
-          <MaterialIcons name="done-all" size={14} color={Palette.primary} />
-        )}
+        {message.outgoing &&
+          (message.pending ? (
+            <MaterialIcons name="schedule" size={12} color={Palette.outline} />
+          ) : message.read ? (
+            <MaterialIcons name="done-all" size={14} color={Palette.primary} />
+          ) : null)}
       </View>
     </View>
   );
@@ -311,29 +316,72 @@ export default function ChatScreen() {
 
   const send = async () => {
     const text = draft.trim();
-    if (!text || sending || !id) return;
+    if (!text || !id) return;
     if (!contact?.publicKey) {
       setError('This contact has not set up encryption yet.');
       return;
     }
-    setSending(true);
+
+    // Editing: update the existing message, then reconcile.
+    if (editing) {
+      const target = editing;
+      setSending(true);
+      try {
+        const { ciphertext, nonce } = await encryptMessage(text, contact.publicKey);
+        await conversationsApi.edit(id, target.id, ciphertext, nonce);
+        setEditing(null);
+        setDraft('');
+        await loadMessages();
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'Failed to edit');
+      } finally {
+        setSending(false);
+      }
+      return;
+    }
+
+    // New message: render it immediately (optimistic) and send in the
+    // background, so the UI never blocks on the server round-trip. The send
+    // response (and the websocket echo) reconcile it with the stored copy.
+    const replyTo = replyingTo;
+    const tempId = `temp-${Date.now()}`;
+    const optimistic: DisplayMessage = {
+      id: tempId,
+      text,
+      time: formatTime(new Date().toISOString()),
+      outgoing: true,
+      read: false,
+      edited: false,
+      deleted: false,
+      reactions: [],
+      reply: replyTo ? { text: replyTo.text, outgoing: replyTo.outgoing } : null,
+      pending: true,
+    };
+    setMessages((prev) => [...prev, optimistic]);
+    setDraft('');
+    setReplyingTo(null);
+    setError(null);
+    stopTyping();
+    requestAnimationFrame(() => listRef.current?.scrollToEnd({ animated: true }));
+
     try {
       const { ciphertext, nonce } = await encryptMessage(text, contact.publicKey);
-      if (editing) {
-        await conversationsApi.edit(id, editing.id, ciphertext, nonce);
-        setEditing(null);
-      } else {
-        await conversationsApi.send(id, ciphertext, nonce, replyingTo?.id);
-        setReplyingTo(null);
-      }
-      setDraft('');
-      stopTyping();
-      await loadMessages();
-      requestAnimationFrame(() => listRef.current?.scrollToEnd({ animated: true }));
+      const res = await conversationsApi.send(id, ciphertext, nonce, replyTo?.id);
+      // Swap the temp id for the real one and clear the pending state. (A
+      // websocket-triggered reload may also reconcile; both paths are idempotent.)
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === tempId
+            ? { ...m, id: res.message.id, pending: false, time: formatTime(res.message.createdAt) }
+            : m,
+        ),
+      );
     } catch (e) {
+      // Roll back the optimistic bubble and restore the draft so the user can retry.
+      setMessages((prev) => prev.filter((m) => m.id !== tempId));
+      setDraft(text);
+      setReplyingTo(replyTo);
       setError(e instanceof Error ? e.message : 'Failed to send');
-    } finally {
-      setSending(false);
     }
   };
 
@@ -391,68 +439,78 @@ export default function ChatScreen() {
   return (
     <SafeAreaView className="flex-1 bg-background">
       {/* Header */}
-      <View className="h-16 flex-row items-center gap-md border-b border-white/5 bg-surface-container/70 px-container-padding">
-        <Pressable onPress={() => router.back()} className="-ml-2 h-10 w-10 items-center justify-center active:scale-95">
+      <View className="h-16 flex-row items-center border-b border-white/5 bg-surface-container/70 px-container-padding">
+        <Pressable onPress={() => router.back()} className="-ml-2 h-10 w-8 items-center justify-center active:scale-95">
           <MaterialIcons name="arrow-back-ios-new" size={20} color={Palette.primary} />
         </Pressable>
+
         {searchOpen ? (
-          <TextInput
-            autoFocus
-            className="h-10 flex-1 rounded-full border border-white/5 bg-surface-container-lowest px-md font-inter text-[15px] text-on-surface"
-            placeholder="Search this chat…"
-            placeholderTextColor={Palette.outline}
-            value={query}
-            onChangeText={setQuery}
-          />
+          <>
+            <TextInput
+              autoFocus
+              className="ml-1 h-10 flex-1 rounded-full border border-white/5 bg-surface-container-lowest px-md font-inter text-[15px] text-on-surface"
+              placeholder="Search this chat…"
+              placeholderTextColor={Palette.outline}
+              value={query}
+              onChangeText={setQuery}
+            />
+            <Pressable
+              onPress={() => {
+                setSearchOpen(false);
+                setQuery('');
+              }}
+              className="ml-1 h-9 w-9 items-center justify-center active:scale-90"
+            >
+              <MaterialIcons name="close" size={20} color={Palette.primary} />
+            </Pressable>
+          </>
         ) : (
           <>
-            <Avatar uri={`https://i.pravatar.cc/150?u=${contact?.id ?? id}`} size={40} showStatus={false} />
-            <View className="min-w-0 flex-1">
-              <Text className="font-inter-semibold text-[18px] text-on-surface" numberOfLines={1}>
+            <Avatar uri={avatarUri(contact, id)} size={38} showStatus={false} />
+            <View className="ml-2 min-w-0 flex-1">
+              <Text className="font-inter-semibold text-[17px] text-on-surface" numberOfLines={1}>
                 {contact?.name ?? 'Chat'}
               </Text>
-              <Text className="font-inter-semibold text-[12px] text-tertiary">
+              <Text className="font-inter-semibold text-[11px] text-tertiary" numberOfLines={1}>
                 {otherTyping ? 'typing…' : 'End-to-end encrypted'}
               </Text>
             </View>
+
+            {/* Action buttons — tight cluster so the name keeps its space */}
+            <View className="flex-row items-center">
+              <Pressable
+                onPress={() => contact && id && call.startCall(id, contact, 'AUDIO')}
+                disabled={!contact?.publicKey}
+                className="h-9 w-9 items-center justify-center active:scale-90"
+                style={{ opacity: contact?.publicKey ? 1 : 0.4 }}
+              >
+                <MaterialIcons name="call" size={20} color={Palette.primary} />
+              </Pressable>
+              <Pressable
+                onPress={() => contact && id && call.startCall(id, contact, 'VIDEO')}
+                disabled={!contact?.publicKey}
+                className="h-9 w-9 items-center justify-center active:scale-90"
+                style={{ opacity: contact?.publicKey ? 1 : 0.4 }}
+              >
+                <MaterialIcons name="videocam" size={20} color={Palette.primary} />
+              </Pressable>
+              <Pressable
+                onPress={() => {
+                  setSearchOpen(true);
+                  setQuery('');
+                }}
+                className="h-9 w-9 items-center justify-center active:scale-90"
+              >
+                <MaterialIcons name="search" size={20} color={Palette.primary} />
+              </Pressable>
+              <Pressable
+                onPress={() => router.push(`/verify/${id}`)}
+                className="h-9 w-9 items-center justify-center active:scale-90"
+              >
+                <MaterialIcons name="verified-user" size={20} color={Palette.tertiary} />
+              </Pressable>
+            </View>
           </>
-        )}
-        {!searchOpen && (
-          <>
-            <Pressable
-              onPress={() => contact && id && call.startCall(id, contact, 'AUDIO')}
-              disabled={!contact?.publicKey}
-              className="h-10 w-10 items-center justify-center active:scale-90"
-              style={{ opacity: contact?.publicKey ? 1 : 0.4 }}
-            >
-              <MaterialIcons name="call" size={22} color={Palette.primary} />
-            </Pressable>
-            <Pressable
-              onPress={() => contact && id && call.startCall(id, contact, 'VIDEO')}
-              disabled={!contact?.publicKey}
-              className="h-10 w-10 items-center justify-center active:scale-90"
-              style={{ opacity: contact?.publicKey ? 1 : 0.4 }}
-            >
-              <MaterialIcons name="videocam" size={22} color={Palette.primary} />
-            </Pressable>
-          </>
-        )}
-        <Pressable
-          onPress={() => {
-            setSearchOpen((v) => !v);
-            setQuery('');
-          }}
-          className="h-10 w-10 items-center justify-center active:scale-90"
-        >
-          <MaterialIcons name={searchOpen ? 'close' : 'search'} size={22} color={Palette.primary} />
-        </Pressable>
-        {!searchOpen && (
-          <Pressable
-            onPress={() => router.push(`/verify/${id}`)}
-            className="h-10 w-10 items-center justify-center active:scale-90"
-          >
-            <MaterialIcons name="verified-user" size={22} color={Palette.tertiary} />
-          </Pressable>
         )}
       </View>
 

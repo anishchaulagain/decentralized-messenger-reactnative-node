@@ -7,6 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Avatar } from '@/components/avatar';
 import { useCall } from '@/context/call';
 import { callsApi, type CallLogEntry } from '@/lib/api';
+import { avatarUri } from '@/lib/avatar';
 import { Palette } from '@/constants/palette';
 
 function fmtDuration(sec: number): string {
@@ -33,7 +34,7 @@ function CallRow({ call, onCallBack }: { call: CallLogEntry; onCallBack: (type: 
 
   return (
     <View className="flex-row items-center rounded-xl p-md">
-      <Avatar uri={`https://i.pravatar.cc/150?u=${call.contact.id}`} size={52} showStatus={false} />
+      <Avatar uri={avatarUri(call.contact)} size={52} showStatus={false} />
       <View className="ml-md min-w-0 flex-1">
         <Text
           className={`font-inter-bold text-[16px] ${missed ? 'text-error' : 'text-on-surface'}`}

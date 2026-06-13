@@ -13,6 +13,7 @@ import { Stack, useRouter, useSegments } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
+import { Text, TextInput } from 'react-native';
 
 import { AppLock } from '@/components/app-lock';
 import { CallOverlay } from '@/components/call-overlay';
@@ -22,6 +23,22 @@ import { notificationTargetFromResponse, type NotificationTarget } from '@/lib/n
 import { Palette } from '@/constants/palette';
 
 SplashScreen.preventAutoHideAsync();
+
+// --- Cross-device UI uniformity ---
+// Render text at its designed dp sizes on every device by ignoring the OS
+// font-size (accessibility) setting — otherwise the same screen looks different
+// on phones configured with larger/smaller system text. Purely visual; nothing
+// functional changes. (RN already handles screen density, so this is the main
+// remaining source of cross-device divergence.)
+type WithDefaults = { defaultProps?: Record<string, unknown> };
+(Text as unknown as WithDefaults).defaultProps = {
+  ...(Text as unknown as WithDefaults).defaultProps,
+  allowFontScaling: false,
+};
+(TextInput as unknown as WithDefaults).defaultProps = {
+  ...(TextInput as unknown as WithDefaults).defaultProps,
+  allowFontScaling: false,
+};
 
 const PROTECTED_ROOTS = ['(tabs)', 'chat', 'verify', 'new-chat', 'requests', 'backup-key'];
 

@@ -16,6 +16,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Avatar } from '@/components/avatar';
 import { useAuth } from '@/context/auth';
 import { conversationsApi, requestsApi, type ConversationSummary } from '@/lib/api';
+import { avatarUri } from '@/lib/avatar';
 import { decryptForMe } from '@/lib/messages';
 import { onSocket } from '@/lib/socket';
 import { Palette } from '@/constants/palette';
@@ -32,7 +33,7 @@ function ChatRow({
   const hasUnread = conversation.unreadCount > 0;
   return (
     <Pressable onPress={onPress} className="flex-row items-center rounded-xl p-md active:bg-primary/5">
-      <Avatar uri={`https://i.pravatar.cc/150?u=${conversation.contact.id}`} size={56} showStatus={false} />
+      <Avatar uri={avatarUri(conversation.contact)} size={56} showStatus={false} />
       <View className="ml-md min-w-0 flex-1">
         <View className="mb-1 flex-row items-baseline justify-between">
           <Text className="flex-1 font-inter-bold text-[16px] text-on-surface" numberOfLines={1}>

@@ -5,6 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Avatar } from '@/components/avatar';
 import { useAuth } from '@/context/auth';
+import { avatarUri } from '@/lib/avatar';
 import { Palette } from '@/constants/palette';
 
 interface RowProps {
@@ -57,7 +58,7 @@ export default function ProfileScreen() {
       <ScrollView contentContainerClassName="px-container-padding pb-28 pt-lg">
         {/* Hero */}
         <View className="items-center">
-          <Avatar uri={`https://i.pravatar.cc/150?u=${user?.id}`} size={112} showStatus={false} />
+          <Avatar uri={avatarUri(user)} size={112} showStatus={false} />
           <Text className="mt-md font-inter-bold text-[24px] text-on-surface">{user?.name}</Text>
           <Text className="mt-xs font-inter text-[14px] text-on-surface-variant">{user?.email}</Text>
         </View>

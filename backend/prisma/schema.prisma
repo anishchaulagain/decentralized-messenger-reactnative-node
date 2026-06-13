@@ -45,6 +45,10 @@ model User {
   // message-history — recovery after a reinstall.
   keyBackup String?
 
+  // Optional profile photo as a small base64 JPEG data URI. Shared with contacts
+  // (so it is stored in the clear, like name/email — not E2E encrypted).
+  avatar String?
+
   // Soft-delete marker. When set, the account is disabled (cannot log in or be
   // searched) but the row and its data are retained. Hard delete removes the row.
   deletedAt DateTime?

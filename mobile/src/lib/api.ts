@@ -135,6 +135,7 @@ export interface PublicUser {
   email: string;
   status: AccountStatus;
   publicKey: string | null;
+  avatar: string | null;
 }
 
 export interface AuthResponse {
@@ -229,6 +230,8 @@ export const usersApi = {
   putBackup: (backup: string) =>
     apiRequest<{ ok: true }>('PUT', '/api/users/me/key-backup', { backup }),
   getBackup: () => apiRequest<{ backup: string | null }>('GET', '/api/users/me/key-backup'),
+  updateAvatar: (avatar: string | null) =>
+    apiRequest<{ user: SessionUser }>('PUT', '/api/users/me/avatar', { avatar }),
 };
 
 export type CallType = 'AUDIO' | 'VIDEO';
