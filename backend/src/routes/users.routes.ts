@@ -6,7 +6,13 @@ import { prisma } from '../lib/prisma';
 import { toPublicUser } from '../lib/serializers';
 import { authenticate, requireApproved } from '../middleware/auth';
 import { validateBody, validateQuery } from '../middleware/validate';
-import { keyBackupSchema, updatePublicKeySchema, userSearchQuery } from '../schemas';
+import {
+  keyBackupSchema,
+  registerPushTokenSchema,
+  unregisterPushTokenSchema,
+  updatePublicKeySchema,
+  userSearchQuery,
+} from '../schemas';
 
 const router = Router();
 
@@ -48,6 +54,36 @@ router.get(
       select: { keyBackup: true },
     });
     res.json({ backup: user?.keyBackup ?? null });
+  }),
+);
+
+// Register (or refresh) this device's Expo push token so the server can send
+// notifications for messages received while the app isn't connected. The token
+// is globally unique to a device, so we reassign it to the current user if it
+// was previously held by another account on this device.
+router.put(
+  '/me/push-token',
+  validateBody(registerPushTokenSchema),
+  asyncHandler(async (req, res) => {
+    const { token, platform } = req.body as { token: string; platform?: string };
+    await prisma.pushToken.upsert({
+      where: { token },
+      create: { token, platform, userId: req.user!.id },
+      update: { userId: req.user!.id, platform },
+    });
+    res.json({ ok: true });
+  }),
+);
+
+// Remove this device's push token (called on sign-out so a shared device stops
+// receiving the previous user's notifications).
+router.delete(
+  '/me/push-token',
+  validateBody(unregisterPushTokenSchema),
+  asyncHandler(async (req, res) => {
+    const { token } = req.body as { token: string };
+    await prisma.pushToken.deleteMany({ where: { token, userId: req.user!.id } });
+    res.json({ ok: true });
   }),
 );
 

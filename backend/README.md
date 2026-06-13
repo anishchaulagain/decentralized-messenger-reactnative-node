@@ -37,6 +37,7 @@ Other scripts: `npm run build` (compile to `dist/`), `npm start` (run build), `n
 | `CORS_ORIGINS` | Comma-separated allowed web origins (unset = allow all; native app is unaffected) |
 | `TRUST_PROXY` | Proxy hops to trust for client IP (set `1`+ behind a proxy/LB) |
 | `AUTH_RATE_MAX` / `GENERAL_RATE_MAX` | Per-IP request ceilings / 15 min (default `50` / `600`) |
+| `EXPO_ACCESS_TOKEN` | *(optional)* Expo push "Enhanced Security" token; sent as a Bearer credential to the Expo push service so only your server can push to your app |
 
 ## Auth
 
@@ -78,6 +79,8 @@ on logout. Reusing a rotated token revokes the whole chain (theft protection).
 | `PUT` | `/api/users/me/keys` | `{ publicKey }` | Register/replace your E2EE public key (base64 X25519) |
 | `PUT` | `/api/users/me/key-backup` | `{ backup }` | Store the passphrase-encrypted private-key backup (opaque blob) |
 | `GET` | `/api/users/me/key-backup` | — | Fetch the encrypted backup (for recovery after reinstall) |
+| `PUT` | `/api/users/me/push-token` | `{ token, platform? }` | Register this device's Expo push token for message notifications |
+| `DELETE` | `/api/users/me/push-token` | `{ token }` | Remove this device's push token (called on sign-out) |
 | `GET` | `/api/users/search?email=` | — | Find an approved user by email (incl. their public key) + relationship state |
 | `POST` | `/api/requests` | `{ recipientId }` | Send a message request |
 | `GET` | `/api/requests/incoming` | — | Pending requests sent to me |
@@ -92,6 +95,25 @@ on logout. Reusing a rotated token revokes the whole chain (theft protection).
 | `GET` | `/api/conversations` | — | My conversations + last (encrypted) message + unread count |
 | `GET` | `/api/conversations/:id/messages` | — | Encrypted messages (marks incoming as read) |
 | `POST` | `/api/conversations/:id/messages` | `{ ciphertext, nonce }` | Send an encrypted message (client encrypts first) |
+
+## Push notifications
+
+When a message is sent and the recipient has **no live Socket.IO connection**
+(`isUserOnline` is false), the server falls back to a push notification via the
+[Expo Push Service](https://docs.expo.dev/push-notifications/sending-notifications/)
+(`src/lib/push.ts`). Online recipients already get the message over the realtime
+channel, so no push is sent.
+
+- **Privacy:** the app is end-to-end encrypted, so the push **never contains
+  message text** — the server can't read it. The title is the sender's name and
+  the payload carries `{ conversationId }` for deep-linking; the body is generic.
+- Each device registers its Expo push token via `PUT /api/users/me/push-token`
+  (stored in the `PushToken` table, one row per device) and removes it on
+  sign-out via `DELETE`. Tokens Expo reports as `DeviceNotRegistered` are pruned
+  automatically when a push is sent.
+- **Requires a development build** on the client: Expo Go no longer supports
+  remote push. The app needs an EAS `projectId` plus FCM (Android) / APNs (iOS)
+  credentials configured via EAS.
 
 ## End-to-end encryption
 

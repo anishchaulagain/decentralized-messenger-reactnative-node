@@ -50,6 +50,18 @@ export function initRealtime(server: HttpServer): Server {
   return io;
 }
 
+/**
+ * Whether a user has at least one live socket connection (i.e. the app is open
+ * and connected). Used to decide whether a message needs a push notification:
+ * if the user is online, the realtime event already delivers it. Single-node
+ * check — revisit if Socket.IO is scaled out with a Redis adapter.
+ */
+export function isUserOnline(userId: string): boolean {
+  if (!io) return false;
+  const room = io.sockets.adapter.rooms.get(userId);
+  return !!room && room.size > 0;
+}
+
 /** Pushes an event to one or more users' rooms (no-op before init). */
 export function emitToUsers(userIds: string[], event: string, payload: unknown): void {
   if (!io) return;

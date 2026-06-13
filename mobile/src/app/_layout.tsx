@@ -8,12 +8,14 @@ import {
 } from '@expo-google-fonts/inter';
 import { SpaceGrotesk_500Medium } from '@expo-google-fonts/space-grotesk';
 import { useFonts } from 'expo-font';
+import * as Notifications from 'expo-notifications';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 
 import { AuthProvider, useAuth } from '@/context/auth';
+import { conversationIdFromResponse } from '@/lib/notifications';
 import { Palette } from '@/constants/palette';
 
 SplashScreen.preventAutoHideAsync();
@@ -24,6 +26,9 @@ function RootNavigator() {
   const { session, ready } = useAuth();
   const segments = useSegments();
   const router = useRouter();
+  // Conversation a tapped notification wants to open; navigated once we're
+  // ready and signed in (chat is a protected route).
+  const [pendingChat, setPendingChat] = useState<string | null>(null);
 
   // Bounce out of protected screens if the session is gone (e.g. after logout).
   useEffect(() => {
@@ -33,6 +38,27 @@ function RootNavigator() {
       router.replace('/login');
     }
   }, [ready, session, segments, router]);
+
+  // Open the relevant chat when the user taps a message notification — both
+  // while the app is running and when it was launched cold by the tap.
+  useEffect(() => {
+    const sub = Notifications.addNotificationResponseReceivedListener((response) => {
+      const id = conversationIdFromResponse(response);
+      if (id) setPendingChat(id);
+    });
+    Notifications.getLastNotificationResponseAsync().then((response) => {
+      const id = conversationIdFromResponse(response);
+      if (id) setPendingChat(id);
+    });
+    return () => sub.remove();
+  }, []);
+
+  useEffect(() => {
+    if (pendingChat && ready && session) {
+      router.push(`/chat/${pendingChat}`);
+      setPendingChat(null);
+    }
+  }, [pendingChat, ready, session, router]);
 
   return (
     <Stack
