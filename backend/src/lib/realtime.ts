@@ -17,6 +17,29 @@ interface CallSignal {
   [key: string]: unknown;
 }
 
+/** All user ids this user shares a conversation with (their "contacts"). */
+async function contactsOf(userId: string): Promise<string[]> {
+  const convos = await prisma.conversation.findMany({
+    where: { OR: [{ userAId: userId }, { userBId: userId }] },
+    select: { userAId: true, userBId: true },
+  });
+  const ids = new Set<string>();
+  for (const c of convos) ids.add(c.userAId === userId ? c.userBId : c.userAId);
+  return [...ids];
+}
+
+/** Tells a user's contacts they came online or went offline. */
+async function broadcastPresence(
+  userId: string,
+  online: boolean,
+  lastSeenAt: Date | null,
+): Promise<void> {
+  const contacts = await contactsOf(userId);
+  for (const id of contacts) {
+    io?.to(id).emit('presence', { userId, online, lastSeenAt });
+  }
+}
+
 /**
  * Returns the other participant's id if `userId` belongs to the conversation,
  * else null. Used to authorize and route relayed events (typing, calls).
@@ -74,6 +97,24 @@ export function initRealtime(server: HttpServer): Server {
   io.on('connection', (socket) => {
     const userId = socket.data.userId as string;
     socket.join(userId);
+
+    // Tell this user's contacts they're online. (Fires per connection; a contact
+    // coming online while offline picks up the current state via the snapshot in
+    // the conversations list.)
+    void broadcastPresence(userId, true, null);
+
+    socket.on('disconnect', () => {
+      // Only mark offline once the user's LAST socket is gone (multi-device). By
+      // the time 'disconnect' fires this socket has left its rooms, so
+      // isUserOnline reflects whether any other connection remains.
+      if (!isUserOnline(userId)) {
+        const now = new Date();
+        prisma.user
+          .update({ where: { id: userId }, data: { lastSeenAt: now } })
+          .catch(() => undefined);
+        void broadcastPresence(userId, false, now);
+      }
+    });
 
     // Relay typing indicators to the other participant. Validated against the
     // DB so a client can't spoof typing into a conversation it isn't part of.

@@ -186,10 +186,19 @@ export interface EncryptedMessage {
 export interface ConversationSummary {
   id: string;
   contact: PublicUser;
+  online: boolean;
+  lastSeenAt: string | null;
   lastMessage: EncryptedMessage | null;
   unreadCount: number;
   updatedAt: string;
   createdAt: string;
+}
+
+/** Live presence update relayed over the socket when a contact connects/disconnects. */
+export interface PresenceEvent {
+  userId: string;
+  online: boolean;
+  lastSeenAt: string | null;
 }
 
 export interface MessageRequest {
