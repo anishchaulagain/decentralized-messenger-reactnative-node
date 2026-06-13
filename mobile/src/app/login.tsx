@@ -12,26 +12,43 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { useAuth } from '@/context/auth';
+import { ApiError } from '@/lib/api';
+import { ensureKeysReady } from '@/lib/e2ee-setup';
 import { Palette } from '@/constants/palette';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export default function LoginScreen() {
   const router = useRouter();
+  const { signIn: authSignIn } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const canSubmit = useMemo(
-    () => EMAIL_RE.test(email.trim()) && password.length >= 1,
-    [email, password],
+    () => EMAIL_RE.test(email.trim()) && password.length >= 1 && !submitting,
+    [email, password, submitting],
   );
 
-  const signIn = () => {
+  const signIn = async () => {
     if (!canSubmit) return;
-    // TODO: POST { email, password } to the auth API, store the returned JWT,
-    // then route into the app.
-    router.replace('/(tabs)/chats');
+    setSubmitting(true);
+    setError(null);
+    try {
+      await authSignIn(email.trim(), password);
+      // Make sure this device has an E2EE keypair (or restore one from backup).
+      const keyState = await ensureKeysReady();
+      router.replace(keyState === 'needs-restore' ? '/restore-key' : '/(tabs)/chats');
+    } catch (e) {
+      const msg =
+        e instanceof ApiError || e instanceof Error ? e.message : 'Something went wrong';
+      setError(msg);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -88,6 +105,12 @@ export default function LoginScreen() {
             <Text className="mt-xs font-inter text-[14px] text-on-surface-variant">
               Sign in to continue to your account.
             </Text>
+
+            {error && (
+              <View className="mt-md rounded-lg border border-error/30 bg-error/10 p-md">
+                <Text className="font-inter text-[13px] text-error">{error}</Text>
+              </View>
+            )}
 
             {/* Email */}
             <View className="mt-lg">
@@ -155,7 +178,9 @@ export default function LoginScreen() {
                 end={{ x: 1, y: 0 }}
                 style={{ borderRadius: 8, paddingVertical: 16, alignItems: 'center' }}
               >
-                <Text className="font-inter-semibold text-[16px] text-white">Sign In</Text>
+                <Text className="font-inter-semibold text-[16px] text-white">
+                  {submitting ? 'Signing in…' : 'Sign In'}
+                </Text>
               </LinearGradient>
             </Pressable>
           </View>

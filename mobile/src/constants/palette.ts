@@ -15,6 +15,7 @@ export const Palette = {
   secondaryContainer: '#571bc1',
   onSecondaryContainer: '#c4abff',
   tertiary: '#4edea3',
+  onTertiary: '#003824',
   error: '#ffb4ab',
   outline: '#8c909f',
   outlineVariant: '#424754',

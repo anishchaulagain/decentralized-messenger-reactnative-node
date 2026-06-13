@@ -1,31 +1,37 @@
 import { MaterialIcons } from '@expo/vector-icons';
-import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
-import { useState } from 'react';
-import { Pressable, ScrollView, Switch, Text, View } from 'react-native';
+import { Pressable, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { AVATARS } from '@/constants/mock-data';
+import { Avatar } from '@/components/avatar';
+import { useAuth } from '@/context/auth';
 import { Palette } from '@/constants/palette';
 
-interface SettingRowProps {
+interface RowProps {
   icon: keyof typeof MaterialIcons.glyphMap;
   tint: string;
   tintBg: string;
   label: string;
+  description?: string;
+  onPress?: () => void;
 }
 
-function SettingRow({ icon, tint, tintBg, label }: SettingRowProps) {
+function Row({ icon, tint, tintBg, label, description, onPress }: RowProps) {
   return (
-    <Pressable className="flex-row items-center justify-between rounded-xl border border-white/5 bg-white/5 p-md active:bg-white/10">
+    <Pressable
+      onPress={onPress}
+      className="flex-row items-center justify-between rounded-xl border border-white/5 bg-white/5 p-md active:bg-white/10"
+    >
       <View className="flex-row items-center gap-md">
-        <View
-          className="h-10 w-10 items-center justify-center rounded-lg"
-          style={{ backgroundColor: tintBg }}
-        >
+        <View className="h-10 w-10 items-center justify-center rounded-lg" style={{ backgroundColor: tintBg }}>
           <MaterialIcons name={icon} size={22} color={tint} />
         </View>
-        <Text className="font-inter-medium text-[16px] text-on-surface">{label}</Text>
+        <View>
+          <Text className="font-inter-medium text-[16px] text-on-surface">{label}</Text>
+          {description && (
+            <Text className="font-inter text-[13px] text-on-surface-variant">{description}</Text>
+          )}
+        </View>
       </View>
       <MaterialIcons name="chevron-right" size={24} color={Palette.outline} />
     </Pressable>
@@ -34,116 +40,73 @@ function SettingRow({ icon, tint, tintBg, label }: SettingRowProps) {
 
 export default function ProfileScreen() {
   const router = useRouter();
-  const [darkMode, setDarkMode] = useState(true);
+  const { session, signOut } = useAuth();
+  const user = session?.user;
+
+  const handleSignOut = async () => {
+    await signOut();
+    router.replace('/login');
+  };
 
   return (
     <SafeAreaView className="flex-1 bg-background" edges={['top']}>
-      {/* Top app bar */}
-      <View className="h-16 flex-row items-center justify-between border-b border-white/5 px-container-padding">
+      <View className="h-16 flex-row items-center border-b border-white/5 px-container-padding">
         <Text className="font-inter-bold text-[20px] text-primary">Profile</Text>
-        <Pressable className="h-10 w-10 items-center justify-center active:opacity-80">
-          <MaterialIcons name="search" size={24} color={Palette.primary} />
-        </Pressable>
       </View>
 
       <ScrollView contentContainerClassName="px-container-padding pb-28 pt-lg">
         {/* Hero */}
         <View className="items-center">
-          <View
-            className="rounded-full border-2 border-primary/30 p-1"
-            style={{
-              shadowColor: Palette.primary,
-              shadowOpacity: 0.3,
-              shadowRadius: 24,
-              elevation: 10,
-            }}
-          >
-            <Image
-              source={{ uri: AVATARS.profile }}
-              style={{ width: 128, height: 128, borderRadius: 64 }}
-              contentFit="cover"
-            />
-          </View>
-          <Text className="mt-md font-inter-bold text-[26px] text-on-surface">Alex Rivers</Text>
-          <Text className="mt-xs max-w-[300px] text-center font-inter text-[16px] leading-6 text-on-surface-variant">
-            Digital Architect & Strategy Lead. Designing the future of decentralized communication.
-          </Text>
+          <Avatar uri={`https://i.pravatar.cc/150?u=${user?.id}`} size={112} showStatus={false} />
+          <Text className="mt-md font-inter-bold text-[24px] text-on-surface">{user?.name}</Text>
+          <Text className="mt-xs font-inter text-[14px] text-on-surface-variant">{user?.email}</Text>
         </View>
 
-        {/* Stats */}
+        {/* Status */}
         <View className="mt-xl flex-row gap-md">
           <View className="flex-1 items-center justify-center rounded-xl border border-white/10 bg-white/5 p-md">
-            <Text className="font-mono text-[10px] uppercase tracking-widest text-primary">
-              Connections
+            <Text className="font-mono text-[10px] uppercase tracking-widest text-primary">Account</Text>
+            <Text className="mt-xs font-inter-semibold text-[16px] text-on-surface">
+              {user?.status === 'APPROVED' ? 'Active' : user?.status?.toLowerCase()}
             </Text>
-            <Text className="mt-xs font-inter-semibold text-[20px] text-on-surface">1.2k</Text>
           </View>
           <View className="flex-1 items-center justify-center rounded-xl border border-white/10 bg-white/5 p-md">
-            <Text className="font-mono text-[10px] uppercase tracking-widest text-tertiary">
-              Status
+            <Text className="font-mono text-[10px] uppercase tracking-widest text-tertiary">Encryption</Text>
+            <Text className="mt-xs font-inter-semibold text-[16px] text-on-surface">
+              {user?.publicKey ? 'On' : 'Off'}
             </Text>
-            <Text className="mt-xs font-inter-semibold text-[20px] text-on-surface">Active</Text>
           </View>
         </View>
 
-        {/* Preferences */}
+        {/* Shortcuts */}
         <Text className="mt-xl px-sm font-inter-semibold text-[12px] uppercase tracking-widest text-outline">
-          Preferences
-        </Text>
-        <View className="mt-stack-gap flex-row items-center justify-between rounded-xl border border-white/5 bg-white/5 p-md">
-          <View className="flex-row items-center gap-md">
-            <View className="h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
-              <MaterialIcons name="dark-mode" size={22} color={Palette.primary} />
-            </View>
-            <View>
-              <Text className="font-inter-medium text-[16px] text-on-surface">Dark Mode</Text>
-              <Text className="font-inter text-[14px] text-on-surface-variant">
-                Enhanced for focus
-              </Text>
-            </View>
-          </View>
-          <Switch
-            value={darkMode}
-            onValueChange={setDarkMode}
-            trackColor={{ false: Palette.outlineVariant, true: Palette.primary }}
-            thumbColor={Palette.onPrimary}
-          />
-        </View>
-
-        {/* Security & access */}
-        <Text className="mt-lg px-sm font-inter-semibold text-[12px] uppercase tracking-widest text-outline">
-          Security & Access
+          Security
         </Text>
         <View className="mt-stack-gap gap-xs">
-          <SettingRow
-            icon="account-circle"
+          <Row
+            icon="backup"
+            tint={Palette.primary}
+            tintBg="rgba(173,198,255,0.1)"
+            label="Encryption backup"
+            description="Recover your key after reinstalling"
+            onPress={() => router.push('/backup-key')}
+          />
+          <Row
+            icon="settings"
             tint={Palette.secondary}
             tintBg="rgba(208,188,255,0.1)"
-            label="Account"
-          />
-          <SettingRow
-            icon="lock"
-            tint={Palette.tertiary}
-            tintBg="rgba(78,222,163,0.1)"
-            label="Privacy"
-          />
-          <SettingRow
-            icon="security"
-            tint={Palette.error}
-            tintBg="rgba(255,180,171,0.1)"
-            label="Security"
+            label="Settings"
+            onPress={() => router.push('/(tabs)/settings')}
           />
         </View>
 
         {/* Sign out */}
         <Pressable
-          onPress={() => router.replace('/login')}
+          onPress={handleSignOut}
           className="mt-xl flex-row items-center justify-center gap-xs active:scale-95"
         >
           <MaterialIcons name="logout" size={18} color={Palette.error} />
-          <Text className="font-inter-semibold text-[12px] tracking-widest text-error">
-            SIGN OUT
-          </Text>
+          <Text className="font-inter-semibold text-[12px] tracking-widest text-error">SIGN OUT</Text>
         </Pressable>
       </ScrollView>
     </SafeAreaView>

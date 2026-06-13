@@ -12,10 +12,11 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { ApiError, authApi } from '@/lib/api';
 import { Palette } from '@/constants/palette';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const MIN_PASSWORD = 6;
+const MIN_PASSWORD = 8;
 
 export default function SignupScreen() {
   const router = useRouter();
@@ -24,6 +25,9 @@ export default function SignupScreen() {
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [done, setDone] = useState(false);
 
   const passwordsMatch = confirm.length > 0 && password === confirm;
   const confirmMismatch = confirm.length > 0 && password !== confirm;
@@ -37,12 +41,45 @@ export default function SignupScreen() {
     [name, email, password, passwordsMatch],
   );
 
-  const signUp = () => {
-    if (!canSubmit) return;
-    // TODO: POST { name, email, password } to the auth API, store the returned
-    // JWT, then route into the app.
-    router.replace('/(tabs)/chats');
+  const signUp = async () => {
+    if (!canSubmit || submitting) return;
+    setSubmitting(true);
+    setError(null);
+    try {
+      await authApi.register({ name: name.trim(), email: email.trim(), password });
+      // New accounts start PENDING — an admin must approve before first login.
+      setDone(true);
+    } catch (e) {
+      setError(e instanceof ApiError || e instanceof Error ? e.message : 'Something went wrong');
+    } finally {
+      setSubmitting(false);
+    }
   };
+
+  if (done) {
+    return (
+      <SafeAreaView className="flex-1 bg-background">
+        <View className="flex-1 items-center justify-center px-xl">
+          <View className="mb-lg h-20 w-20 items-center justify-center rounded-full border border-tertiary/30 bg-tertiary/10">
+            <MaterialIcons name="hourglass-top" size={40} color={Palette.tertiary} />
+          </View>
+          <Text className="text-center font-inter-bold text-[24px] text-on-surface">
+            Awaiting approval
+          </Text>
+          <Text className="mt-sm text-center font-inter text-[15px] leading-6 text-on-surface-variant">
+            Your account has been created. An administrator must approve it before you can sign in.
+            We&apos;ll let you in as soon as it&apos;s approved.
+          </Text>
+          <Pressable
+            onPress={() => router.replace('/login')}
+            className="mt-xl rounded-xl bg-primary px-xl py-md active:scale-[0.98]"
+          >
+            <Text className="font-inter-semibold text-[16px] text-on-primary">Back to Sign In</Text>
+          </Pressable>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView className="flex-1 bg-background">
@@ -100,6 +137,12 @@ export default function SignupScreen() {
             <Text className="mt-xs font-inter text-[14px] text-on-surface-variant">
               Sign up to get started with Dipanix.
             </Text>
+
+            {error && (
+              <View className="mt-md rounded-lg border border-error/30 bg-error/10 p-md">
+                <Text className="font-inter text-[13px] text-error">{error}</Text>
+              </View>
+            )}
 
             {/* Name */}
             <View className="mt-lg">
@@ -209,7 +252,9 @@ export default function SignupScreen() {
                 end={{ x: 1, y: 0 }}
                 style={{ borderRadius: 8, paddingVertical: 16, alignItems: 'center' }}
               >
-                <Text className="font-inter-semibold text-[16px] text-white">Create Account</Text>
+                <Text className="font-inter-semibold text-[16px] text-white">
+                  {submitting ? 'Creating…' : 'Create Account'}
+                </Text>
               </LinearGradient>
             </Pressable>
           </View>
