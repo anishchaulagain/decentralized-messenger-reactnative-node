@@ -160,6 +160,12 @@ export default function ChatScreen() {
           </Text>
         </View>
         <View className="flex-row items-center gap-sm">
+          <Pressable
+            onPress={() => router.push(`/verify/${chat.id}`)}
+            className="h-10 w-10 items-center justify-center active:scale-90"
+          >
+            <MaterialIcons name="verified-user" size={22} color={Palette.tertiary} />
+          </Pressable>
           <Pressable className="h-10 w-10 items-center justify-center active:scale-90">
             <MaterialIcons name="videocam" size={24} color={Palette.onSurfaceVariant} />
           </Pressable>

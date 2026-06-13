@@ -1,0 +1,143 @@
+// Dipanix data model.
+// Flow: register -> PENDING -> admin APPROVED/REJECTED -> login (approved only)
+// -> search by email -> message request -> accept -> conversation -> messages.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+
+enum AccountStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum RequestStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+}
+
+model User {
+  id           String        @id @default(uuid())
+  email        String        @unique
+  name         String
+  passwordHash String
+  role         Role          @default(USER)
+  status       AccountStatus @default(PENDING)
+
+  // Base64 X25519 public key for end-to-end encryption. The matching private
+  // key never leaves the user's device, so the server cannot read messages.
+  publicKey String?
+
+  // Opaque, passphrase-encrypted backup of the user's private key. The server
+  // stores it but cannot decrypt it (no passphrase), enabling key — and thus
+  // message-history — recovery after a reinstall.
+  keyBackup String?
+
+  // Admin moderation trail
+  reviewedAt   DateTime?
+  reviewedBy   User?         @relation("Reviewer", fields: [reviewedById], references: [id])
+  reviewedById String?
+  reviewed     User[]        @relation("Reviewer")
+
+  sentRequests     MessageRequest[] @relation("Requester")
+  receivedRequests MessageRequest[] @relation("Recipient")
+
+  conversationsA Conversation[] @relation("UserA")
+  conversationsB Conversation[] @relation("UserB")
+  messages       Message[]      @relation("Sender")
+  refreshTokens  RefreshToken[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
+}
+
+// Long-lived refresh tokens, stored as a SHA-256 hash (never the raw value).
+// Rotated on every use; reuse of a revoked token revokes the whole chain.
+model RefreshToken {
+  id           String    @id @default(uuid())
+  tokenHash    String    @unique
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId       String
+  expiresAt    DateTime
+  revokedAt    DateTime?
+  replacedById String?
+
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+// A request from one user to another to start chatting.
+model MessageRequest {
+  id          String        @id @default(uuid())
+  requester   User          @relation("Requester", fields: [requesterId], references: [id], onDelete: Cascade)
+  requesterId String
+  recipient   User          @relation("Recipient", fields: [recipientId], references: [id], onDelete: Cascade)
+  recipientId String
+  status      RequestStatus @default(PENDING)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([requesterId, recipientId])
+  @@index([recipientId, status])
+  @@index([requesterId, status])
+}
+
+// Created only when a message request is accepted. userAId < userBId is enforced
+// in code so each pair maps to exactly one conversation regardless of direction.
+model Conversation {
+  id      String @id @default(uuid())
+  userA   User   @relation("UserA", fields: [userAId], references: [id], onDelete: Cascade)
+  userAId String
+  userB   User   @relation("UserB", fields: [userBId], references: [id], onDelete: Cascade)
+  userBId String
+
+  messages Message[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userAId, userBId])
+  @@index([userAId])
+  @@index([userBId])
+}
+
+// Messages are end-to-end encrypted. The server stores only the ciphertext and
+// the public keys used, never plaintext and never any private key.
+model Message {
+  id             String       @id @default(uuid())
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  conversationId String
+  sender         User         @relation("Sender", fields: [senderId], references: [id], onDelete: Cascade)
+  senderId       String
+
+  // NaCl box: base64 ciphertext + 24-byte nonce. Decryptable only by the two
+  // participants using their private keys.
+  ciphertext         String
+  nonce              String
+  // Snapshots of both parties' public keys at send time, so decryption still
+  // works if either party later rotates their key.
+  senderPublicKey    String
+  recipientPublicKey String
+
+  readAt DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@index([conversationId, createdAt])
+}
