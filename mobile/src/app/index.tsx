@@ -71,14 +71,14 @@ export default function SplashScreen() {
             elevation: 12,
           }}
         >
-          <Text className="font-inter-bold text-6xl text-primary">L</Text>
+          <Text className="font-inter-bold text-6xl text-primary">D</Text>
         </View>
       </View>
 
       {/* Brand */}
       <View className="mt-xl items-center">
         <Text className="font-inter-bold text-[26px] uppercase tracking-[0.2em] text-primary">
-          Lumina
+          Dipanix
         </Text>
         <Animated.Text
           style={pulseStyle}

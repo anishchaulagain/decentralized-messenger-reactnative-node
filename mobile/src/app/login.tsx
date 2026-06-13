@@ -50,7 +50,7 @@ export default function LoginScreen() {
               <MaterialIcons name="hub" size={30} color={Palette.primary} />
             </View>
             <Text className="font-inter-bold text-[26px] tracking-tight text-on-surface">
-              FutureComm
+              Dipanix
             </Text>
             <Text className="mt-xs font-inter-semibold text-[12px] uppercase tracking-widest text-outline">
               Autonomous Portal
