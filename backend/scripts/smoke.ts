@@ -109,6 +109,10 @@ async function main() {
   const dup = await api('POST', '/api/auth/register', { name: 'Alice2', email: aliceEmail, password: pw });
   check('duplicate email -> 409', dup.status === 409, dup.data);
 
+  // Weak password rejected
+  const weak = await api('POST', '/api/auth/register', { name: 'Weak', email: `weak+${stamp}@example.com`, password: 'short' });
+  check('weak password (<8) -> 422', weak.status === 422, weak.data);
+
   // Pending user cannot log in
   const earlyLogin = await api('POST', '/api/auth/login', { email: aliceEmail, password: pw });
   check('pending user login -> 403', earlyLogin.status === 403, earlyLogin.data);

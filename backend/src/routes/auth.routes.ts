@@ -2,7 +2,7 @@ import { Router } from 'express';
 
 import { ApiError, asyncHandler } from '../lib/http-error';
 import { signAccessToken } from '../lib/jwt';
-import { hashPassword, verifyPassword } from '../lib/password';
+import { DUMMY_PASSWORD_HASH, hashPassword, verifyPassword } from '../lib/password';
 import { prisma } from '../lib/prisma';
 import {
   issueTokenPair,
@@ -57,7 +57,10 @@ router.post(
     const { email, password } = req.body as { email: string; password: string };
 
     const user = await prisma.user.findUnique({ where: { email } });
-    if (!user || !(await verifyPassword(password, user.passwordHash))) {
+    // Always run a hash comparison (against a dummy hash when the user is
+    // missing) so the response time doesn't reveal whether the email exists.
+    const passwordOk = await verifyPassword(password, user?.passwordHash ?? DUMMY_PASSWORD_HASH);
+    if (!user || !passwordOk) {
       throw new ApiError(401, 'Invalid email or password');
     }
 

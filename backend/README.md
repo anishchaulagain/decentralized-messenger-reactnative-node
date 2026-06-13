@@ -34,6 +34,9 @@ Other scripts: `npm run build` (compile to `dist/`), `npm start` (run build), `n
 | `REFRESH_TOKEN_TTL_DAYS` | Refresh-token lifetime in days (default `30`) |
 | `ADMIN_USER_EMAIL` / `ADMIN_PASSWORD` / `ADMIN_NAME` | Seed admin credentials |
 | `PORT` | Server port (default `3000`) |
+| `CORS_ORIGINS` | Comma-separated allowed web origins (unset = allow all; native app is unaffected) |
+| `TRUST_PROXY` | Proxy hops to trust for client IP (set `1`+ behind a proxy/LB) |
+| `AUTH_RATE_MAX` / `GENERAL_RATE_MAX` | Per-IP request ceilings / 15 min (default `50` / `600`) |
 
 ## Auth
 
@@ -119,9 +122,42 @@ the old key.
 (`PENDING`/`ACCEPTED`/`REJECTED`), `Conversation` (one per user pair), `Message`,
 `RefreshToken` (hashed, rotating). See `prisma/schema.prisma`.
 
+## Security posture
+
+What's in place:
+
+- **E2EE messages** — server stores only ciphertext (see above).
+- **Passwords** — bcrypt (cost 12); login runs a constant-time comparison even
+  for unknown emails (no user enumeration via timing); generic `Invalid email or
+  password` error.
+- **Tokens** — short-lived access JWT (HS256, algorithm + issuer pinned to block
+  `alg:none`/confusion) + rotating, hashed, revocable refresh tokens with reuse
+  detection.
+- **Rate limiting** — strict per-IP ceiling on `/api/auth`, broad ceiling on the
+  rest of the API.
+- **Transport/app** — `helmet` security headers, configurable CORS allowlist,
+  64 KB JSON body limit, `trust proxy` for correct client-IP attribution.
+- **Input** — every request body/query validated with `zod`; Prisma parameterizes
+  all SQL.
+- **Authorization** — role (`ADMIN`) and account-status (`APPROVED`) guards;
+  conversation access restricted to participants; users can only act on their own
+  requests.
+
+Hardening still recommended before production:
+
+- **Serve over TLS only** (terminate HTTPS at the proxy/LB) — the bearer tokens and
+  ciphertext are confidential in transit only under TLS.
+- **Forward secrecy** — messages use one long-term keypair per user, so a leaked
+  private key exposes past messages. Add a Double-Ratchet layer (use a vetted
+  library such as libsignal — do not hand-roll it).
+- **Public-key verification** — a malicious server could substitute public keys
+  (MITM). Surface a key fingerprint / safety number in the client for out-of-band
+  verification.
+- **Secret management** — keep `JWT_SECRET` / DB creds in a secrets manager, rotate
+  periodically; scope the DB user to least privilege.
+- **Refresh-token cleanup** — prune expired/revoked rows on a schedule.
+
 ## Notes / next steps
 
 - Real-time delivery is not implemented yet — messaging is REST polling. A Socket.IO
   layer over the same conversation/message model is the natural next step.
-- Expired refresh-token rows are left in the table; a periodic cleanup job
-  (`DELETE … WHERE expiresAt < now() OR revokedAt IS NOT NULL`) can prune them.
